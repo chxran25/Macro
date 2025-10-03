@@ -1,24 +1,81 @@
 import { Tabs } from "expo-router";
-import { Home, Utensils, Search, User2 } from "lucide-react-native";
+import { Platform } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-export default function TabLayout() {
+export default function TabsLayout() {
+    const tabBg = "#0a0a0a";
+    const border = "#1f1f1f";
+
     return (
         <Tabs
             screenOptions={{
-                headerShown: false,                // ← hides default headers
+                headerShown: false,
+                tabBarActiveTintColor: "#ffffff",
+                tabBarInactiveTintColor: "#9ca3af",
                 tabBarStyle: {
-                    backgroundColor: "#0f0f0f",
-                    borderTopColor: "#1f1f1f",
-                    height: 72,
+                    backgroundColor: tabBg,
+                    borderTopColor: border,
+                    height: Platform.select({ ios: 84, android: 74 }),
+                    paddingTop: 8,
+                    paddingBottom: Platform.select({ ios: 20, android: 14 }),
                 },
-                tabBarActiveTintColor: "white",
-                tabBarInactiveTintColor: "#8b8b8b",
+                tabBarLabelStyle: {
+                    fontSize: 11,
+                },
             }}
         >
-            <Tabs.Screen name="index"   options={{ title: "Home",   tabBarIcon: ({ color }) => <Home   color={color} size={22}/> }} />
-            <Tabs.Screen name="meals"   options={{ title: "Meals",  tabBarIcon: ({ color }) => <Utensils color={color} size={22}/> }} />
-            <Tabs.Screen name="search"  options={{ title: "Search", tabBarIcon: ({ color }) => <Search color={color} size={22}/> }} />
-            <Tabs.Screen name="profile" options={{ title: "Profile",tabBarIcon: ({ color }) => <User2  color={color} size={22}/> }} />
+            <Tabs.Screen
+                name="index"
+                options={{
+                    title: "Home",
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="home-outline" color={color} size={size} />
+                    ),
+                }}
+            />
+
+            {/* If you have a Meals screen at app/(tabs)/meals.tsx */}
+            <Tabs.Screen
+                name="meals"
+                options={{
+                    title: "Meals",
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="restaurant-outline" color={color} size={size} />
+                    ),
+                }}
+            />
+
+            {/* New Recipes tab */}
+            <Tabs.Screen
+                name="recipes"
+                options={{
+                    title: "Recipes",
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="book-outline" color={color} size={size} />
+                    ),
+                }}
+            />
+
+            {/* If you call it tracker.tsx or search.tsx, match the filename */}
+            <Tabs.Screen
+                name="tracker"
+                options={{
+                    title: "Tracker",
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="stats-chart-outline" color={color} size={size} />
+                    ),
+                }}
+            />
+
+            <Tabs.Screen
+                name="profile"
+                options={{
+                    title: "Profile",
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="person-circle-outline" color={color} size={size} />
+                    ),
+                }}
+            />
         </Tabs>
     );
 }
