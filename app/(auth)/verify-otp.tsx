@@ -1,3 +1,4 @@
+// app/(auth)/verify-otp.tsx
 import React, { useState } from "react";
 import {
     SafeAreaView,
@@ -11,7 +12,7 @@ import {
     Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { saveTokens } from "../../utils/secureStore";
+import { saveTokens, setOnboarded, getRefreshToken } from "../../utils/secureStore";
 
 export default function VerifyOtp() {
     const router = useRouter();
@@ -33,25 +34,36 @@ export default function VerifyOtp() {
 
             setLoading(true);
 
-            const res = await fetch(
-                "https://calorieboy.onrender.com/api/users/verify-otp",
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ phoneNumber: phone, otp }),
-                }
-            );
+            const res = await fetch("https://calorieboy.onrender.com/api/users/verify-otp", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ phoneNumber: String(phone), otp }),
+            });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "OTP verification failed");
+            if (!res.ok) throw new Error(data?.error || "OTP verification failed");
+
+            // 🔎 FRONTEND LOGS — tokens from API response
+            console.log("✅ OTP verified for:", String(phone));
+            console.log("👉 Access Token (from API):", data?.accessToken);
+            console.log("👉 Refresh Token (from API):", data?.refreshToken);
 
             // Save tokens securely
             await saveTokens(data.accessToken, data.refreshToken);
 
+            // (Optional) Read back the refresh token to confirm it persisted
+            const storedRefresh = await getRefreshToken();
+            console.log("📦 Refresh Token (stored in SecureStore):", storedRefresh);
+
+            // Mark onboarding as NOT complete yet so first-time users go to Meals
+            await setOnboarded(false);
+
             Alert.alert("Success", "You are now logged in!");
-            router.replace("/(tabs)");
+            // First-time flow → go to Meals to choose preferences
+            router.replace("/(tabs)/meals");
         } catch (e: any) {
-            Alert.alert("Error", e.message);
+            console.error("Verify OTP error (frontend):", e);
+            Alert.alert("Error", e?.message ?? "Something went wrong during OTP verification.");
         } finally {
             setLoading(false);
         }
@@ -65,9 +77,7 @@ export default function VerifyOtp() {
             >
                 <View className="flex-1 px-6 items-center justify-center">
                     <Text className="text-white text-3xl font-bold mb-2">Verify OTP</Text>
-                    <Text className="text-neutral-400 mb-6">
-                        Enter the OTP sent to {phone}
-                    </Text>
+                    <Text className="text-neutral-400 mb-6">Enter the OTP sent to {String(phone)}</Text>
 
                     <TextInput
                         value={otp}

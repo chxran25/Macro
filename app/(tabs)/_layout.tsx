@@ -19,9 +19,7 @@ export default function TabsLayout() {
                     paddingTop: 8,
                     paddingBottom: Platform.select({ ios: 20, android: 14 }),
                 },
-                tabBarLabelStyle: {
-                    fontSize: 11,
-                },
+                tabBarLabelStyle: { fontSize: 11 },
             }}
         >
             <Tabs.Screen
@@ -34,7 +32,6 @@ export default function TabsLayout() {
                 }}
             />
 
-            {/* If you have a Meals screen at app/(tabs)/meals.tsx */}
             <Tabs.Screen
                 name="meals"
                 options={{
@@ -45,7 +42,6 @@ export default function TabsLayout() {
                 }}
             />
 
-            {/* New Recipes tab */}
             <Tabs.Screen
                 name="recipes"
                 options={{
@@ -56,13 +52,12 @@ export default function TabsLayout() {
                 }}
             />
 
-            {/* If you call it tracker.tsx or search.tsx, match the filename */}
             <Tabs.Screen
-                name="tracker"
+                name="search"
                 options={{
-                    title: "Tracker",
+                    title: "Search",
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="stats-chart-outline" color={color} size={size} />
+                        <Ionicons name="search-outline" color={color} size={size} />
                     ),
                 }}
             />

@@ -1,41 +1,44 @@
 import { useEffect, useState } from "react";
-import * as SecureStore from "expo-secure-store";
-import { useRouter } from "expo-router";
+import { useRouter, usePathname } from "expo-router";
+import { getRefreshToken, getOnboarded } from "../utils/secureStore";
 
 export function useAuthRedirect() {
     const [loading, setLoading] = useState(true);
     const router = useRouter();
+    const pathname = usePathname();
 
     useEffect(() => {
-        const checkAuth = async () => {
-            try {
-                // assuming you stored refreshToken securely after login
-                const token = await SecureStore.getItemAsync("refreshToken");
+        let mounted = true;
 
-                if (!token) {
-                    router.replace("/(auth)/login");
+        const run = async () => {
+            try {
+                const refresh = await getRefreshToken();
+                const onboarded = await getOnboarded(); // "true" | "false" | null
+
+                if (!refresh) {
+                    // not logged in
+                    if (pathname !== "/(auth)/login") router.replace("/(auth)/login");
                     return;
                 }
 
-                // TODO: replace with your actual refresh/validate API call
-                const res = await fetch("https://calorieboy.onrender.com/api/users/validate", {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-
-                if (res.ok) {
-                    router.replace("/(tabs)");
-                } else {
-                    router.replace("/(auth)/login");
+                // logged in – decide first-time vs regular
+                if (onboarded !== "true") {
+                    if (pathname !== "/(tabs)/meals") router.replace("/(tabs)/meals");
+                    return;
                 }
-            } catch (e) {
-                router.replace("/(auth)/login");
+
+                // regular users go to tabs home (which renders (tabs)/index.tsx)
+                if (!pathname.startsWith("/(tabs)")) router.replace("/(tabs)");
             } finally {
-                setLoading(false);
+                if (mounted) setLoading(false);
             }
         };
 
-        checkAuth();
-    }, []);
+        run();
+        return () => {
+            mounted = false;
+        };
+    }, [pathname, router]);
 
     return { loading };
 }
