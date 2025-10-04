@@ -1,3 +1,4 @@
+// app/(auth)/login.tsx
 import React, { useMemo, useState } from "react";
 import {
     View,
@@ -40,7 +41,8 @@ export default function Login() {
             if (!res.ok) throw new Error(data.error || "Login failed");
 
             Alert.alert("OTP Sent", "Please verify your phone number.");
-            router.push({ pathname: "/(auth)/verify-otp", params: { phone: phoneNumber.trim() } });
+            // 👇 Pass origin for post-OTP routing
+            router.push({ pathname: "/verify-otp", params: { phone: phoneNumber.trim(), from: "login" } });
         } catch (e: any) {
             Alert.alert("Error", e.message);
         } finally {

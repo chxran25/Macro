@@ -2,11 +2,10 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "paths": {
-      "@/*": [
-        "./*"
-      ]
-    }
+    "baseUrl": ".",
+    "paths": { "@/*": ["./*"] },
+    "jsx": "react-jsx",
+    "jsxImportSource": "nativewind"
   },
   "include": [
     "**/*.ts",

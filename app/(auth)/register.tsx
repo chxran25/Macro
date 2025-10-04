@@ -1,155 +1,63 @@
 // app/(auth)/register.tsx
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    ScrollView,
     Alert,
     KeyboardAvoidingView,
     Platform,
-    Switch,
+    ScrollView,
     StatusBar,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
-export default function Register() {
-    const insets = useSafeAreaInsets();
-    const router = useRouter();
-    const [step, setStep] = useState(0);
-    const [submitting, setSubmitting] = useState(false);
+/* ----------------------------- Reusable Card ----------------------------- */
+const Card = ({ children }: { children: React.ReactNode }) => (
+    <View
+        className="rounded-3xl p-8 border border-white/10 bg-white/5 mb-8"
+        style={{
+            shadowColor: "#000",
+            shadowOpacity: 0.4,
+            shadowRadius: 24,
+            shadowOffset: { width: 0, height: 12 },
+            elevation: 12,
+        }}
+    >
+        {children}
+    </View>
+);
 
-    // ========= FORM STATE =========
-    const [name, setName] = useState("");
-    const [phoneNumber, setPhoneNumber] = useState(""); // will coerce to +91XXXXXXXXXX
-    const [address, setAddress] = useState("");
+/* ------------------------------- Step One -------------------------------- */
+type StepOneProps = {
+    name: string;
+    setName: (v: string) => void;
+    nameValid: boolean;
 
-    const [gender, setGender] = useState("");
-    const [age, setAge] = useState("");
-    const [height, setHeight] = useState("");
-    const [weight, setWeight] = useState("");
-    const [fitnessGoal, setFitnessGoal] = useState("");
+    phoneNumber: string;
+    setPhoneNumber: (v: string) => void;
+    phoneValid: boolean;
 
-    const [dietType, setDietType] = useState("");
-    const [spicePreference, setSpicePreference] = useState("");
-    const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
-    const [otherAllergens, setOtherAllergens] = useState("");
+    address: string;
+    setAddress: (v: string) => void;
+    addressValid: boolean;
+};
 
-    const [foodDislikes, setFoodDislikes] = useState("");
-    const [cuisinePreferences, setCuisinePreferences] = useState<string[]>([]);
-
-    const [mealFrequency, setMealFrequency] = useState("");
-    const [eatingWindow, setEatingWindow] = useState("");
-    const [useMacroCalculator, setUseMacroCalculator] = useState(false);
-    const [calories, setCalories] = useState("");
-    const [protein, setProtein] = useState("");
-    const [carbs, setCarbs] = useState("");
-    const [fat, setFat] = useState("");
-
-    const toggleArrayValue = (
-        arr: string[],
-        value: string,
-        setter: (val: string[]) => void
-    ) => {
-        if (arr.includes(value)) setter(arr.filter((x) => x !== value));
-        else setter([...arr, value]);
-    };
-
-    // ========= VALIDATION =========
-    const nameValid = useMemo(() => name.trim().length >= 2, [name]);
-    const phoneValid = useMemo(
-        () => /^(\+91\d{10})$/.test(phoneNumber.trim()),
-        [phoneNumber]
-    );
-    const addressValid = useMemo(() => address.trim().length > 4, [address]);
-
-    const canSubmit = nameValid && phoneValid && addressValid && !submitting;
-
-    // ========= API SUBMIT =========
-    const onSubmit = async () => {
-        try {
-            if (!nameValid || !phoneValid || !addressValid) {
-                Alert.alert("Error", "Please fill the required fields correctly.");
-                return;
-            }
-
-            setSubmitting(true);
-
-            // Build payload safely
-            const payload: any = {
-                name: name.trim(),
-                phoneNumber: phoneNumber.trim(), // +91XXXXXXXXXX
-                addresses: [address.trim()],
-                gender: gender || undefined,
-                age: age ? Number(age) : undefined,
-                height: height ? Number(height) : undefined,
-                weight: weight ? Number(weight) : undefined,
-                fitnessGoal: fitnessGoal || undefined,
-
-                dietType: dietType || undefined,
-                spicePreference: spicePreference || undefined,
-                dietaryRestrictions:
-                    dietaryRestrictions.length > 0 ? dietaryRestrictions : undefined,
-                otherAllergens: otherAllergens?.trim() || undefined,
-
-                foodDislikes: foodDislikes?.trim() || undefined,
-                cuisinePreferences:
-                    cuisinePreferences.length > 0 ? cuisinePreferences : undefined,
-
-                mealFrequency: mealFrequency || undefined,
-                eatingWindow: eatingWindow || undefined,
-                useMacroCalculator,
-
-                // macros (send numbers only if provided)
-                calories: calories ? Number(calories) : undefined,
-                protein: protein ? Number(protein) : undefined,
-                carbs: carbs ? Number(carbs) : undefined,
-                fat: fat ? Number(fat) : undefined,
-            };
-
-            const res = await fetch(
-                "https://calorieboy.onrender.com/api/users/signup",
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload),
-                }
-            );
-
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data?.error || "Signup failed");
-
-            Alert.alert("OTP Sent", "Please verify your phone number.");
-            router.push({
-                pathname: "/(auth)/verify-otp",
-                params: { phone: phoneNumber.trim() },
-            });
-        } catch (e: any) {
-            Alert.alert("Error", e?.message ?? "Something went wrong.");
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    // ========= STEP SCREENS =========
-    const Card = ({ children }: { children: React.ReactNode }) => (
-        <View
-            className="rounded-3xl p-8 border border-white/10 bg-white/5 mb-8"
-            style={{
-                shadowColor: "#000",
-                shadowOpacity: 0.4,
-                shadowRadius: 24,
-                shadowOffset: { width: 0, height: 12 },
-                elevation: 12,
-            }}
-        >
-            {children}
-        </View>
-    );
-
-    const StepOne = () => (
+function StepOne({
+                     name,
+                     setName,
+                     nameValid,
+                     phoneNumber,
+                     setPhoneNumber,
+                     phoneValid,
+                     address,
+                     setAddress,
+                     addressValid,
+                 }: StepOneProps) {
+    return (
         <Card>
             <Text className="text-white text-3xl font-bold mb-8">Create Account</Text>
             <View className="space-y-4">
@@ -164,6 +72,7 @@ export default function Register() {
                         value={name}
                         onChangeText={setName}
                         autoCapitalize="words"
+                        autoCorrect={false}
                     />
                     {!nameValid && name.length > 0 && (
                         <Text className="text-red-400 mt-2">Please enter your full name.</Text>
@@ -187,15 +96,18 @@ export default function Register() {
                                 className="flex-1 text-white text-lg font-medium"
                                 value={phoneNumber}
                                 onChangeText={(t) => {
-                                    if (t && !t.startsWith("+91")) {
-                                        setPhoneNumber(
-                                            "+91" + t.replace(/^\+?91?/, "").replace(/\D/g, "")
-                                        );
-                                    } else {
-                                        setPhoneNumber(t.replace(/[^\d+]/g, ""));
+                                    // Stable formatter that won't fight the caret
+                                    if (t === "") {
+                                        setPhoneNumber("");
+                                        return;
                                     }
+                                    const raw = t.replace(/[^\d]/g, "");
+                                    let ten = raw.startsWith("91") ? raw.slice(2) : raw;
+                                    ten = ten.slice(0, 10);
+                                    setPhoneNumber(ten ? `+91${ten}` : "+91");
                                 }}
                                 maxLength={13}
+                                autoCorrect={false}
                             />
                         </View>
                     </View>
@@ -218,18 +130,44 @@ export default function Register() {
                         onChangeText={setAddress}
                         multiline
                         numberOfLines={2}
+                        autoCorrect={false}
                     />
                     {!addressValid && address.length > 0 && (
-                        <Text className="text-red-400 mt-2">
-                            Please enter a valid address.
-                        </Text>
+                        <Text className="text-red-400 mt-2">Please enter a valid address.</Text>
                     )}
                 </View>
             </View>
         </Card>
     );
+}
 
-    const StepTwo = () => (
+/* ------------------------------- Step Two -------------------------------- */
+type StepTwoProps = {
+    gender: string;
+    setGender: (v: string) => void;
+    age: string;
+    setAge: (v: string) => void;
+    height: string;
+    setHeight: (v: string) => void;
+    weight: string;
+    setWeight: (v: string) => void;
+    fitnessGoal: string;
+    setFitnessGoal: (v: string) => void;
+};
+
+function StepTwo({
+                     gender,
+                     setGender,
+                     age,
+                     setAge,
+                     height,
+                     setHeight,
+                     weight,
+                     setWeight,
+                     fitnessGoal,
+                     setFitnessGoal,
+                 }: StepTwoProps) {
+    return (
         <Card>
             <Text className="text-white text-3xl font-bold mb-8">Personal Details</Text>
             <View className="space-y-4">
@@ -250,6 +188,7 @@ export default function Register() {
                             value={field.state}
                             onChangeText={field.set}
                             keyboardType={(field as any).keyboardType || "default"}
+                            autoCorrect={false}
                         />
                     </View>
                 ))}
@@ -283,8 +222,36 @@ export default function Register() {
             </View>
         </Card>
     );
+}
 
-    const StepThree = () => (
+/* ------------------------------ Step Three ------------------------------- */
+type StepThreeProps = {
+    dietType: string;
+    setDietType: (v: string) => void;
+    spicePreference: string;
+    setSpicePreference: (v: string) => void;
+    dietaryRestrictions: string[];
+    setDietaryRestrictions: (v: string[]) => void;
+    otherAllergens: string;
+    setOtherAllergens: (v: string) => void;
+};
+
+function StepThree({
+                       dietType,
+                       setDietType,
+                       spicePreference,
+                       setSpicePreference,
+                       dietaryRestrictions,
+                       setDietaryRestrictions,
+                       otherAllergens,
+                       setOtherAllergens,
+                   }: StepThreeProps) {
+    const toggle = (arr: string[], value: string, setter: (v: string[]) => void) => {
+        if (arr.includes(value)) setter(arr.filter((x) => x !== value));
+        else setter([...arr, value]);
+    };
+
+    return (
         <Card>
             <Text className="text-white text-3xl font-bold mb-8">Diet Preferences</Text>
 
@@ -356,9 +323,7 @@ export default function Register() {
                     {["Lactose", "Gluten", "Peanut", "Soy"].map((r) => (
                         <TouchableOpacity
                             key={r}
-                            onPress={() =>
-                                toggleArrayValue(dietaryRestrictions, r, setDietaryRestrictions)
-                            }
+                            onPress={() => toggle(dietaryRestrictions, r, setDietaryRestrictions)}
                             className={`px-5 py-3 rounded-2xl border-2 ${
                                 dietaryRestrictions.includes(r)
                                     ? "bg-emerald-400 border-emerald-400"
@@ -382,12 +347,33 @@ export default function Register() {
                     className="mt-4 bg-neutral-900/80 rounded-2xl px-5 py-4 text-white text-base border border-white/5"
                     value={otherAllergens}
                     onChangeText={setOtherAllergens}
+                    autoCorrect={false}
                 />
             </View>
         </Card>
     );
+}
 
-    const StepFour = () => (
+/* ------------------------------ Step Four ------------------------------- */
+type StepFourProps = {
+    foodDislikes: string;
+    setFoodDislikes: (v: string) => void;
+    cuisinePreferences: string[];
+    setCuisinePreferences: (v: string[]) => void;
+};
+
+function StepFour({
+                      foodDislikes,
+                      setFoodDislikes,
+                      cuisinePreferences,
+                      setCuisinePreferences,
+                  }: StepFourProps) {
+    const toggle = (arr: string[], value: string, setter: (v: string[]) => void) => {
+        if (arr.includes(value)) setter(arr.filter((x) => x !== value));
+        else setter([...arr, value]);
+    };
+
+    return (
         <Card>
             <Text className="text-white text-3xl font-bold mb-8">Food & Cuisine</Text>
 
@@ -403,6 +389,7 @@ export default function Register() {
                     onChangeText={setFoodDislikes}
                     multiline
                     numberOfLines={3}
+                    autoCorrect={false}
                 />
             </View>
 
@@ -418,13 +405,7 @@ export default function Register() {
                 ].map((cuisine) => (
                     <TouchableOpacity
                         key={cuisine.name}
-                        onPress={() =>
-                            toggleArrayValue(
-                                cuisinePreferences,
-                                cuisine.name,
-                                setCuisinePreferences
-                            )
-                        }
+                        onPress={() => toggle(cuisinePreferences, cuisine.name, setCuisinePreferences)}
                         className="flex-row items-center mb-4 bg-neutral-900/50 rounded-2xl p-4 border border-white/5"
                     >
                         <View
@@ -439,16 +420,49 @@ export default function Register() {
                             )}
                         </View>
                         <Text className="text-xl mr-3">{cuisine.emoji}</Text>
-                        <Text className="text-white font-medium text-lg">
-                            {cuisine.name}
-                        </Text>
+                        <Text className="text-white font-medium text-lg">{cuisine.name}</Text>
                     </TouchableOpacity>
                 ))}
             </View>
         </Card>
     );
+}
 
-    const StepFive = () => (
+/* ------------------------------- Step Five ------------------------------- */
+type StepFiveProps = {
+    mealFrequency: string;
+    setMealFrequency: (v: string) => void;
+    eatingWindow: string;
+    setEatingWindow: (v: string) => void;
+    useMacroCalculator: boolean;
+    setUseMacroCalculator: (v: boolean) => void;
+    calories: string;
+    setCalories: (v: string) => void;
+    protein: string;
+    setProtein: (v: string) => void;
+    carbs: string;
+    setCarbs: (v: string) => void;
+    fat: string;
+    setFat: (v: string) => void;
+};
+
+function StepFive({
+                      mealFrequency,
+                      setMealFrequency,
+                      eatingWindow,
+                      setEatingWindow,
+                      useMacroCalculator,
+                      setUseMacroCalculator,
+                      calories,
+                      setCalories,
+                      protein,
+                      setProtein,
+                      carbs,
+                      setCarbs,
+                      fat,
+                      setFat,
+                  }: StepFiveProps) {
+    return (
         <Card>
             <Text className="text-white text-3xl font-bold mb-8">Meal Planning</Text>
 
@@ -489,18 +503,15 @@ export default function Register() {
                     className="bg-neutral-900/80 rounded-2xl px-5 py-4 text-white text-base border border-white/5"
                     value={eatingWindow}
                     onChangeText={setEatingWindow}
+                    autoCorrect={false}
                 />
             </View>
 
             <View className="mt-8 bg-neutral-900/50 rounded-2xl p-5 border border-white/5">
                 <View className="flex-row items-center justify-between mb-5">
                     <View>
-                        <Text className="text-white font-bold text-lg">
-                            Use Macro Calculator
-                        </Text>
-                        <Text className="text-neutral-400 text-sm mt-1">
-                            Auto-calculate your macros
-                        </Text>
+                        <Text className="text-white font-bold text-lg">Use Macro Calculator</Text>
+                        <Text className="text-neutral-400 text-sm mt-1">Auto-calculate your macros</Text>
                     </View>
                     <Switch
                         value={useMacroCalculator}
@@ -526,9 +537,7 @@ export default function Register() {
                             <Text className="text-neutral-300 text-sm font-medium tracking-wide">
                                 {field.label.toUpperCase()}
                             </Text>
-                            <Text className="text-emerald-400 text-xs font-semibold">
-                                {field.unit}
-                            </Text>
+                            <Text className="text-emerald-400 text-xs font-semibold">{field.unit}</Text>
                         </View>
                         <TextInput
                             placeholder={field.placeholder}
@@ -537,14 +546,178 @@ export default function Register() {
                             className="bg-neutral-900/80 rounded-2xl px-5 py-4 text-white text-lg border border-white/5"
                             value={field.state}
                             onChangeText={field.set}
+                            autoCorrect={false}
                         />
                     </View>
                 ))}
             </View>
         </Card>
     );
+}
 
-    const steps = [<StepOne key="s1" />, <StepTwo key="s2" />, <StepThree key="s3" />, <StepFour key="s4" />, <StepFive key="s5" />];
+/* =============================== Main Page =============================== */
+
+export default function Register() {
+    const insets = useSafeAreaInsets();
+    const router = useRouter();
+    const [step, setStep] = useState(0);
+    const [submitting, setSubmitting] = useState(false);
+
+    // ========= FORM STATE =========
+    const [name, setName] = useState("");
+    const [phoneNumber, setPhoneNumber] = useState(""); // +91XXXXXXXXXX
+    const [address, setAddress] = useState("");
+
+    const [gender, setGender] = useState("");
+    const [age, setAge] = useState("");
+    const [height, setHeight] = useState("");
+    const [weight, setWeight] = useState("");
+    const [fitnessGoal, setFitnessGoal] = useState("");
+
+    const [dietType, setDietType] = useState("");
+    const [spicePreference, setSpicePreference] = useState("");
+    const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
+    const [otherAllergens, setOtherAllergens] = useState("");
+
+    const [foodDislikes, setFoodDislikes] = useState("");
+    const [cuisinePreferences, setCuisinePreferences] = useState<string[]>([]);
+
+    const [mealFrequency, setMealFrequency] = useState("");
+    const [eatingWindow, setEatingWindow] = useState("");
+    const [useMacroCalculator, setUseMacroCalculator] = useState(false);
+    const [calories, setCalories] = useState("");
+    const [protein, setProtein] = useState("");
+    const [carbs, setCarbs] = useState("");
+    const [fat, setFat] = useState("");
+
+    // ========= VALIDATION =========
+    const nameValid = useMemo(() => name.trim().length >= 2, [name]);
+    const phoneValid = useMemo(() => /^(\+91\d{10})$/.test(phoneNumber.trim()), [phoneNumber]);
+    const addressValid = useMemo(() => address.trim().length > 4, [address]);
+    const canSubmit = nameValid && phoneValid && addressValid && !submitting;
+
+    // ========= API SUBMIT =========
+    const onSubmit = async () => {
+        try {
+            if (!nameValid || !phoneValid || !addressValid) {
+                Alert.alert("Error", "Please fill the required fields correctly.");
+                return;
+            }
+
+            setSubmitting(true);
+
+            const payload: any = {
+                name: name.trim(),
+                phoneNumber: phoneNumber.trim(),
+                addresses: [address.trim()],
+                gender: gender || undefined,
+                age: age ? Number(age) : undefined,
+                height: height ? Number(height) : undefined,
+                weight: weight ? Number(weight) : undefined,
+                fitnessGoal: fitnessGoal || undefined,
+
+                dietType: dietType || undefined,
+                spicePreference: spicePreference || undefined,
+                dietaryRestrictions: dietaryRestrictions.length > 0 ? dietaryRestrictions : undefined,
+                otherAllergens: otherAllergens?.trim() || undefined,
+
+                foodDislikes: foodDislikes?.trim() || undefined,
+                cuisinePreferences: cuisinePreferences.length > 0 ? cuisinePreferences : undefined,
+
+                mealFrequency: mealFrequency || undefined,
+                eatingWindow: eatingWindow || undefined,
+                useMacroCalculator,
+
+                calories: calories ? Number(calories) : undefined,
+                protein: protein ? Number(protein) : undefined,
+                carbs: carbs ? Number(carbs) : undefined,
+                fat: fat ? Number(fat) : undefined,
+            };
+
+            const res = await fetch("https://calorieboy.onrender.com/api/users/signup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || "Signup failed");
+
+            Alert.alert("OTP Sent", "Please verify your phone number.");
+            router.push({
+                pathname: "/verify-otp",
+                params: { phone: phoneNumber.trim(), from: "register" },
+            });
+        } catch (e: any) {
+            Alert.alert("Error", e?.message ?? "Something went wrong.");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // Keep the step list as stable values
+    const steps = [
+        <StepOne
+            key="s1"
+            name={name}
+            setName={setName}
+            nameValid={nameValid}
+            phoneNumber={phoneNumber}
+            setPhoneNumber={setPhoneNumber}
+            phoneValid={phoneValid}
+            address={address}
+            setAddress={setAddress}
+            addressValid={addressValid}
+        />,
+        <StepTwo
+            key="s2"
+            gender={gender}
+            setGender={setGender}
+            age={age}
+            setAge={setAge}
+            height={height}
+            setHeight={setHeight}
+            weight={weight}
+            setWeight={setWeight}
+            fitnessGoal={fitnessGoal}
+            setFitnessGoal={setFitnessGoal}
+        />,
+        <StepThree
+            key="s3"
+            dietType={dietType}
+            setDietType={setDietType}
+            spicePreference={spicePreference}
+            setSpicePreference={setSpicePreference}
+            dietaryRestrictions={dietaryRestrictions}
+            setDietaryRestrictions={setDietaryRestrictions}
+            otherAllergens={otherAllergens}
+            setOtherAllergens={setOtherAllergens}
+        />,
+        <StepFour
+            key="s4"
+            foodDislikes={foodDislikes}
+            setFoodDislikes={setFoodDislikes}
+            cuisinePreferences={cuisinePreferences}
+            setCuisinePreferences={setCuisinePreferences}
+        />,
+        <StepFive
+            key="s5"
+            mealFrequency={mealFrequency}
+            setMealFrequency={setMealFrequency}
+            eatingWindow={eatingWindow}
+            setEatingWindow={setEatingWindow}
+            useMacroCalculator={useMacroCalculator}
+            setUseMacroCalculator={setUseMacroCalculator}
+            calories={calories}
+            setCalories={setCalories}
+            protein={protein}
+            setProtein={setProtein}
+            carbs={carbs}
+            setCarbs={setCarbs}
+            fat={fat}
+            setFat={setFat}
+        />,
+    ] as const;
 
     return (
         <SafeAreaView
@@ -566,53 +739,37 @@ export default function Register() {
                 />
             </View>
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : undefined}
-                className="flex-1"
-            >
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
                 <ScrollView
                     className="flex-1 px-6"
                     contentContainerStyle={{ paddingVertical: 40 }}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
                 >
-                    {/* Hero Section */}
+                    {/* Hero */}
                     <View className="items-center mb-12">
                         <View className="mb-4">
-                            <Text className="text-white text-6xl font-extrabold tracking-tight">
-                                CalorieBoy
-                            </Text>
+                            <Text className="text-white text-6xl font-extrabold tracking-tight">CalorieBoy</Text>
                             <View className="h-1.5 bg-emerald-400 rounded-full mt-3 w-24 self-center" />
                         </View>
 
                         <Text className="text-white text-3xl font-bold mb-4">Sign Up</Text>
 
-                        {/* Progress Indicator */}
+                        {/* Progress */}
                         <View className="flex-row items-center">
                             {steps.map((_, idx) => (
                                 <View key={idx} className="flex-row items-center">
                                     <View
                                         className={`w-10 h-10 rounded-full items-center justify-center ${
-                                            idx === step
-                                                ? "bg-emerald-400"
-                                                : idx < step
-                                                    ? "bg-emerald-400/30"
-                                                    : "bg-neutral-800"
+                                            idx === step ? "bg-emerald-400" : idx < step ? "bg-emerald-400/30" : "bg-neutral-800"
                                         }`}
                                     >
-                                        <Text
-                                            className={`font-bold ${
-                                                idx === step ? "text-black" : "text-white"
-                                            }`}
-                                        >
+                                        <Text className={`font-bold ${idx === step ? "text-black" : "text-white"}`}>
                                             {idx + 1}
                                         </Text>
                                     </View>
                                     {idx < steps.length - 1 && (
-                                        <View
-                                            className={`w-8 h-1 mx-1 ${
-                                                idx < step ? "bg-emerald-400/30" : "bg-neutral-800"
-                                            }`}
-                                        />
+                                        <View className={`w-8 h-1 mx-1 ${idx < step ? "bg-emerald-400/30" : "bg-neutral-800"}`} />
                                     )}
                                 </View>
                             ))}
@@ -623,10 +780,11 @@ export default function Register() {
                         </Text>
                     </View>
 
+                    {/* Current Step */}
                     {steps[step]}
                 </ScrollView>
 
-                {/* Navigation buttons */}
+                {/* Navigation */}
                 <View className="px-6 pb-8 bg-black border-t border-white/5">
                     <View className="flex-row justify-between items-center pt-6">
                         {step > 0 ? (
@@ -636,9 +794,7 @@ export default function Register() {
                                 activeOpacity={0.8}
                                 disabled={submitting}
                             >
-                                <Text className="text-white font-bold text-center text-lg">
-                                    ← Previous
-                                </Text>
+                                <Text className="text-white font-bold text-center text-lg">← Previous</Text>
                             </TouchableOpacity>
                         ) : (
                             <View className="flex-1 mr-3" />
@@ -658,16 +814,12 @@ export default function Register() {
                                 }}
                                 disabled={submitting}
                             >
-                                <Text className="text-black font-bold text-center text-lg">
-                                    Next →
-                                </Text>
+                                <Text className="text-black font-bold text-center text-lg">Next →</Text>
                             </TouchableOpacity>
                         ) : (
                             <TouchableOpacity
                                 onPress={onSubmit}
-                                className={`flex-1 ml-3 px-6 py-5 rounded-2xl ${
-                                    canSubmit ? "bg-emerald-400" : "bg-emerald-400/40"
-                                }`}
+                                className={`flex-1 ml-3 px-6 py-5 rounded-2xl ${canSubmit ? "bg-emerald-400" : "bg-emerald-400/40"}`}
                                 activeOpacity={0.8}
                                 disabled={!canSubmit}
                                 style={{

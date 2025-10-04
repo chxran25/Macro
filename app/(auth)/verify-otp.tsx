@@ -16,7 +16,7 @@ import { saveTokens, setOnboarded, getRefreshToken } from "../../utils/secureSto
 
 export default function VerifyOtp() {
     const router = useRouter();
-    const { phone } = useLocalSearchParams<{ phone: string }>();
+    const { phone, from } = useLocalSearchParams<{ phone: string; from?: string }>();
 
     const [otp, setOtp] = useState("");
     const [loading, setLoading] = useState(false);
@@ -55,12 +55,16 @@ export default function VerifyOtp() {
             const storedRefresh = await getRefreshToken();
             console.log("📦 Refresh Token (stored in SecureStore):", storedRefresh);
 
-            // Mark onboarding as NOT complete yet so first-time users go to Meals
-            await setOnboarded(false);
+            // ✅ Route based on origin
+            if (from === "register") {
+                await setOnboarded(false);
+                Alert.alert("Success", "You are now logged in!");
+                router.replace("/meals");     // was "/(tabs)/meals"
+            } else {
+                Alert.alert("Success", "You are now logged in!");
+                router.replace("/(tabs)");          // was "/(tabs)/index"
+            }
 
-            Alert.alert("Success", "You are now logged in!");
-            // First-time flow → go to Meals to choose preferences
-            router.replace("/(tabs)/meals");
         } catch (e: any) {
             console.error("Verify OTP error (frontend):", e);
             Alert.alert("Error", e?.message ?? "Something went wrong during OTP verification.");
@@ -77,7 +81,9 @@ export default function VerifyOtp() {
             >
                 <View className="flex-1 px-6 items-center justify-center">
                     <Text className="text-white text-3xl font-bold mb-2">Verify OTP</Text>
-                    <Text className="text-neutral-400 mb-6">Enter the OTP sent to {String(phone)}</Text>
+                    <Text className="text-neutral-400 mb-6">
+                        Enter the OTP sent to {String(phone)}
+                    </Text>
 
                     <TextInput
                         value={otp}
