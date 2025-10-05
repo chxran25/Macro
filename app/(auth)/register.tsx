@@ -14,17 +14,19 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import * as Location from "expo-location";
+import { Picker } from "@react-native-picker/picker";
 
 /* ----------------------------- Reusable Card ----------------------------- */
 const Card = ({ children }: { children: React.ReactNode }) => (
     <View
-        className="rounded-3xl p-8 border border-white/10 bg-white/5 mb-8"
+        className="rounded-3xl p-6 border border-white/10 bg-white/5 mb-6 w-full"
         style={{
             shadowColor: "#000",
-            shadowOpacity: 0.4,
-            shadowRadius: 24,
-            shadowOffset: { width: 0, height: 12 },
-            elevation: 12,
+            shadowOpacity: 0.25,
+            shadowRadius: 14,
+            shadowOffset: { width: 0, height: 8 },
+            elevation: 8,
         }}
     >
         {children}
@@ -40,10 +42,6 @@ type StepOneProps = {
     phoneNumber: string;
     setPhoneNumber: (v: string) => void;
     phoneValid: boolean;
-
-    address: string;
-    setAddress: (v: string) => void;
-    addressValid: boolean;
 };
 
 function StepOne({
@@ -53,50 +51,49 @@ function StepOne({
                      phoneNumber,
                      setPhoneNumber,
                      phoneValid,
-                     address,
-                     setAddress,
-                     addressValid,
                  }: StepOneProps) {
     return (
         <Card>
-            <Text className="text-white text-3xl font-bold mb-8">Create Account</Text>
-            <View className="space-y-4">
-                <View>
-                    <Text className="text-neutral-300 mb-2 text-sm font-medium tracking-wide">
+            <Text allowFontScaling={false} className="text-white text-2xl font-extrabold mb-6">
+                Create Account
+            </Text>
+
+            <View className="space-y-4 w-full">
+                <View className="w-full">
+                    <Text className="text-neutral-300 mb-2 text-xs font-medium tracking-wide">
                         FULL NAME
                     </Text>
                     <TextInput
                         placeholder="John Doe"
                         placeholderTextColor="#6B7280"
-                        className="bg-neutral-900/80 rounded-2xl px-5 py-4 text-white text-lg border border-white/5"
+                        className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                         value={name}
                         onChangeText={setName}
                         autoCapitalize="words"
                         autoCorrect={false}
                     />
                     {!nameValid && name.length > 0 && (
-                        <Text className="text-red-400 mt-2">Please enter your full name.</Text>
+                        <Text className="text-red-400 mt-2 text-xs">Please enter your full name.</Text>
                     )}
                 </View>
 
-                <View className="mt-5">
-                    <Text className="text-neutral-300 mb-2 text-sm font-medium tracking-wide">
+                <View className="w-full mt-4">
+                    <Text className="text-neutral-300 mb-2 text-xs font-medium tracking-wide">
                         PHONE NUMBER
                     </Text>
-                    <View className="bg-neutral-900/80 rounded-2xl px-4 py-4 border border-white/5">
-                        <View className="flex-row items-center">
+                    <View className="w-full bg-neutral-900/80 rounded-2xl px-3 py-3 border border-white/5">
+                        <View className="flex-row items-center w-full" style={{ flexShrink: 1 }}>
                             <View className="flex-row items-center bg-emerald-500/10 rounded-xl px-3 py-2 mr-3 border border-emerald-500/20">
-                                <Text className="text-2xl">🇮🇳</Text>
-                                <Text className="text-white ml-2 font-bold text-base">+91</Text>
+                                <Text className="text-xl">🇮🇳</Text>
+                                <Text className="text-white ml-2 font-bold text-sm">+91</Text>
                             </View>
                             <TextInput
                                 placeholder="XXXXXXXXXX"
                                 placeholderTextColor="#6B7280"
                                 keyboardType="phone-pad"
-                                className="flex-1 text-white text-lg font-medium"
+                                className="flex-1 text-white text-base font-medium"
                                 value={phoneNumber}
                                 onChangeText={(t) => {
-                                    // Stable formatter that won't fight the caret
                                     if (t === "") {
                                         setPhoneNumber("");
                                         return;
@@ -112,28 +109,9 @@ function StepOne({
                         </View>
                     </View>
                     {!phoneValid && phoneNumber.length > 0 && (
-                        <Text className="text-red-400 mt-2">
+                        <Text className="text-red-400 mt-2 text-xs">
                             Format must be +91 followed by 10 digits.
                         </Text>
-                    )}
-                </View>
-
-                <View className="mt-5">
-                    <Text className="text-neutral-300 mb-2 text-sm font-medium tracking-wide">
-                        ADDRESS
-                    </Text>
-                    <TextInput
-                        placeholder="Enter your delivery address"
-                        placeholderTextColor="#6B7280"
-                        className="bg-neutral-900/80 rounded-2xl px-5 py-4 text-white text-base border border-white/5"
-                        value={address}
-                        onChangeText={setAddress}
-                        multiline
-                        numberOfLines={2}
-                        autoCorrect={false}
-                    />
-                    {!addressValid && address.length > 0 && (
-                        <Text className="text-red-400 mt-2">Please enter a valid address.</Text>
                     )}
                 </View>
             </View>
@@ -142,6 +120,95 @@ function StepOne({
 }
 
 /* ------------------------------- Step Two -------------------------------- */
+// Helpers
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+const onlyDigits = (s: string) => s.replace(/[^\d]/g, "");
+
+// Reusable numeric stepper with editable input + up/down arrows
+function NumberStepper({
+                           label,
+                           unit,
+                           value,
+                           onChangeText,
+                           min,
+                           max,
+                           step = 1,
+                           maxLength,
+                       }: {
+    label: string;
+    unit?: string;
+    value: string; // keep as string so we can allow temporary blank while typing
+    onChangeText: (s: string) => void;
+    min: number;
+    max: number;
+    step?: number;
+    maxLength?: number;
+}) {
+    const n = Number.isFinite(Number(value)) && value !== "" ? Number(value) : NaN;
+
+    const inc = () => onChangeText(String(clamp(isNaN(n) ? min : n + step, min, max)));
+    const dec = () => onChangeText(String(clamp(isNaN(n) ? min : n - step, min, max)));
+
+    const handleBlur = () => {
+        // If empty or NaN, snap to min. Otherwise clamp into range.
+        const next = value.trim() === "" ? min : clamp(Number(value), min, max);
+        onChangeText(String(next));
+    };
+
+    return (
+        <View className="w-full mb-4">
+            <View className="flex-row items-center justify-between mb-2">
+                <Text className="text-neutral-300 text-xs font-medium tracking-wide">
+                    {label.toUpperCase()}
+                </Text>
+                {!!unit && <Text className="text-emerald-400 text-[10px] font-semibold">{unit}</Text>}
+            </View>
+
+            <View className="flex-row items-stretch bg-neutral-900/80 rounded-2xl border border-white/5 overflow-hidden">
+                {/* Editable numeric input */}
+                <View className="flex-1 px-4 py-3 justify-center">
+                    <TextInput
+                        placeholder={`${min}`}
+                        placeholderTextColor="#6B7280"
+                        value={value}
+                        onChangeText={(t) => {
+                            // Allow empty to let user retype, otherwise keep digits only
+                            const cleaned = t === "" ? "" : onlyDigits(t);
+                            onChangeText(cleaned);
+                        }}
+                        onBlur={handleBlur}
+                        keyboardType="number-pad"
+                        inputMode="numeric"
+                        maxLength={maxLength}
+                        className="text-white text-base font-semibold"
+                    />
+                </View>
+
+                {/* Up/Down control */}
+                <View className="w-12 border-l border-white/10">
+                    <TouchableOpacity
+                        accessibilityLabel={`Increase ${label}`}
+                        onPress={inc}
+                        className="flex-1 items-center justify-center bg-white/5 active:bg-white/10"
+                        style={{ paddingVertical: 8 }}
+                    >
+                        <Text className="text-white text-base">▲</Text>
+                    </TouchableOpacity>
+                    <View className="h-px bg-white/10" />
+                    <TouchableOpacity
+                        accessibilityLabel={`Decrease ${label}`}
+                        onPress={dec}
+                        className="flex-1 items-center justify-center bg-white/5 active:bg-white/10"
+                        style={{ paddingVertical: 8 }}
+                    >
+                        <Text className="text-white text-base">▼</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </View>
+    );
+}
+
 type StepTwoProps = {
     gender: string;
     setGender: (v: string) => void;
@@ -169,62 +236,201 @@ function StepTwo({
                  }: StepTwoProps) {
     return (
         <Card>
-            <Text className="text-white text-3xl font-bold mb-8">Personal Details</Text>
-            <View className="space-y-4">
-                {[
-                    { label: "GENDER", placeholder: "Male / Female / Other", state: gender, set: setGender },
-                    { label: "AGE", placeholder: "Enter your age", state: age, set: setAge, keyboardType: "numeric" },
-                    { label: "HEIGHT (CM)", placeholder: "e.g., 175", state: height, set: setHeight, keyboardType: "numeric" },
-                    { label: "WEIGHT (KG)", placeholder: "e.g., 70", state: weight, set: setWeight, keyboardType: "numeric" },
-                ].map((field, i) => (
-                    <View key={i} className={i > 0 ? "mt-5" : ""}>
-                        <Text className="text-neutral-300 mb-2 text-sm font-medium tracking-wide">
-                            {field.label}
-                        </Text>
-                        <TextInput
-                            placeholder={field.placeholder}
-                            placeholderTextColor="#6B7280"
-                            className="bg-neutral-900/80 rounded-2xl px-5 py-4 text-white text-lg border border-white/5"
-                            value={field.state}
-                            onChangeText={field.set}
-                            keyboardType={(field as any).keyboardType || "default"}
-                            autoCorrect={false}
-                        />
-                    </View>
-                ))}
+            <Text allowFontScaling={false} className="text-white text-2xl font-extrabold mb-6">
+                Personal Details
+            </Text>
 
-                <View className="mt-6">
-                    <Text className="text-neutral-300 mb-3 text-sm font-medium tracking-wide">
-                        FITNESS GOAL
-                    </Text>
-                    <View className="flex-row flex-wrap gap-3">
-                        {["Maintain", "Lose Fat", "Build Muscle"].map((goal) => (
-                            <TouchableOpacity
-                                key={goal}
-                                onPress={() => setFitnessGoal(goal)}
-                                className={`px-6 py-3 rounded-2xl border-2 ${
-                                    fitnessGoal === goal
-                                        ? "bg-emerald-400 border-emerald-400"
-                                        : "bg-neutral-900/50 border-white/10"
+            {/* Gender dropdown */}
+            <View className="w-full mb-4">
+                <Text className="text-neutral-300 mb-2 text-xs font-medium tracking-wide">GENDER</Text>
+                <View className="bg-neutral-900/80 rounded-2xl border border-white/5 overflow-hidden">
+                    <Picker
+                        selectedValue={gender || "Man"}
+                        onValueChange={(val) => setGender(val)}
+                        dropdownIconColor="#fff"
+                        style={{ color: "#fff" }}
+                    >
+                        <Picker.Item label="Man" value="Man" />
+                        <Picker.Item label="Woman" value="Woman" />
+                    </Picker>
+                </View>
+            </View>
+
+            {/* Age stepper (years) — range 10..100 */}
+            <NumberStepper
+                label="Age"
+                unit="years"
+                value={age}
+                onChangeText={setAge}
+                min={10}
+                max={100}
+                step={1}
+                maxLength={3}
+            />
+
+            {/* Height stepper (cm) — range 100..240 */}
+            <NumberStepper
+                label="Height"
+                unit="cm"
+                value={height}
+                onChangeText={setHeight}
+                min={100}
+                max={240}
+                step={1}
+                maxLength={3}
+            />
+
+            {/* Weight stepper (kg) — range 20..300 */}
+            <NumberStepper
+                label="Weight"
+                unit="kg"
+                value={weight}
+                onChangeText={setWeight}
+                min={20}
+                max={300}
+                step={1}
+                maxLength={3}
+            />
+
+            {/* Fitness goal chips (unchanged) */}
+            <View className="mt-2 w-full">
+                <Text className="text-neutral-300 mb-3 text-xs font-medium tracking-wide">
+                    FITNESS GOAL
+                </Text>
+                <View className="flex-row flex-wrap">
+                    {["Maintain", "Lose Fat", "Build Muscle"].map((goal) => (
+                        <TouchableOpacity
+                            key={goal}
+                            onPress={() => setFitnessGoal(goal)}
+                            className={`px-5 py-3 mr-2 mb-2 rounded-2xl border-2 ${
+                                fitnessGoal === goal
+                                    ? "bg-emerald-400 border-emerald-400"
+                                    : "bg-neutral-900/50 border-white/10"
+                            }`}
+                        >
+                            <Text
+                                className={`font-semibold text-sm ${
+                                    fitnessGoal === goal ? "text-black" : "text-white"
                                 }`}
                             >
-                                <Text
-                                    className={`font-semibold text-base ${
-                                        fitnessGoal === goal ? "text-black" : "text-white"
-                                    }`}
-                                >
-                                    {goal}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                                {goal}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
                 </View>
             </View>
         </Card>
     );
 }
 
-/* ------------------------------ Step Three ------------------------------- */
+/* ------------------------------ NEW Step Three --------------------------- */
+type StepAddressProps = {
+    flatNo: string;
+    setFlatNo: (v: string) => void;
+    block: string;
+    setBlock: (v: string) => void;
+    apartment: string;
+    setApartment: (v: string) => void;
+    addressValid: boolean;
+
+    onPickLocation: () => Promise<void>;
+    locLoading: boolean;
+    latitude: number | null;
+    longitude: number | null;
+};
+
+function StepAddress({
+                         flatNo,
+                         setFlatNo,
+                         block,
+                         setBlock,
+                         apartment,
+                         setApartment,
+                         addressValid,
+                         onPickLocation,
+                         locLoading,
+                         latitude,
+                         longitude,
+                     }: StepAddressProps) {
+    return (
+        <Card>
+            <Text allowFontScaling={false} className="text-white text-2xl font-extrabold mb-6">
+                Address
+            </Text>
+
+            <View className="w-full">
+                <Text className="text-neutral-300 mb-2 text-xs font-medium tracking-wide">
+                    FLAT / HOUSE NUMBER
+                </Text>
+                <TextInput
+                    placeholder="e.g., 12B"
+                    placeholderTextColor="#6B7280"
+                    className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
+                    value={flatNo}
+                    onChangeText={setFlatNo}
+                    autoCorrect={false}
+                />
+            </View>
+
+            <View className="w-full mt-4">
+                <Text className="text-neutral-300 mb-2 text-xs font-medium tracking-wide">
+                    BLOCK / TOWER
+                </Text>
+                <TextInput
+                    placeholder="e.g., Block A"
+                    placeholderTextColor="#6B7280"
+                    className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
+                    value={block}
+                    onChangeText={setBlock}
+                    autoCorrect={false}
+                />
+            </View>
+
+            <View className="w-full mt-4">
+                <Text className="text-neutral-300 mb-2 text-xs font-medium tracking-wide">
+                    APARTMENT / COMMUNITY
+                </Text>
+                <TextInput
+                    placeholder="e.g., Ramky Pearl"
+                    placeholderTextColor="#6B7280"
+                    className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
+                    value={apartment}
+                    onChangeText={setApartment}
+                    autoCorrect={false}
+                />
+            </View>
+
+            {!addressValid && (flatNo || block || apartment) && (
+                <Text className="text-red-400 mt-2 text-xs">Please fill all the address fields.</Text>
+            )}
+
+            <View className="mt-5 w-full flex-row items-center justify-between">
+                <TouchableOpacity
+                    onPress={onPickLocation}
+                    className="px-4 py-3 rounded-2xl bg-emerald-500/20 border border-emerald-500/40"
+                    disabled={locLoading}
+                    activeOpacity={0.8}
+                >
+                    <Text className="text-emerald-300 font-semibold">
+                        {locLoading ? "Getting location..." : "Use my location"}
+                    </Text>
+                </TouchableOpacity>
+
+                <View className="flex-row items-center">
+                    {latitude != null && longitude != null ? (
+                        <Text className="text-neutral-300 text-xs">
+                            📍 {latitude.toFixed(5)}, {longitude.toFixed(5)}
+                        </Text>
+                    ) : (
+                        <Text className="text-neutral-500 text-xs">No coordinates yet</Text>
+                    )}
+                </View>
+            </View>
+        </Card>
+    );
+}
+
+/* ------------------------------ Step Four -------------------------------- */
 type StepThreeProps = {
     dietType: string;
     setDietType: (v: string) => void;
@@ -253,25 +459,27 @@ function StepThree({
 
     return (
         <Card>
-            <Text className="text-white text-3xl font-bold mb-8">Diet Preferences</Text>
+            <Text allowFontScaling={false} className="text-white text-2xl font-extrabold mb-6">
+                Diet Preferences
+            </Text>
 
-            <View className="mb-6">
-                <Text className="text-neutral-300 mb-3 text-sm font-medium tracking-wide">
+            <View className="mb-4 w-full">
+                <Text className="text-neutral-300 mb-3 text-xs font-medium tracking-wide">
                     DIET TYPE
                 </Text>
-                <View className="flex-row flex-wrap gap-3">
+                <View className="flex-row flex-wrap">
                     {["Veg", "Non-Veg", "Both"].map((dt) => (
                         <TouchableOpacity
                             key={dt}
                             onPress={() => setDietType(dt)}
-                            className={`px-6 py-3 rounded-2xl border-2 ${
+                            className={`px-5 py-3 mr-2 mb-2 rounded-2xl border-2 ${
                                 dietType === dt
                                     ? "bg-emerald-400 border-emerald-400"
                                     : "bg-neutral-900/50 border-white/10"
                             }`}
                         >
                             <Text
-                                className={`font-semibold text-base ${
+                                className={`font-semibold text-sm ${
                                     dietType === dt ? "text-black" : "text-white"
                                 }`}
                             >
@@ -282,11 +490,11 @@ function StepThree({
                 </View>
             </View>
 
-            <View className="mt-8">
-                <Text className="text-neutral-300 mb-3 text-sm font-medium tracking-wide">
+            <View className="mt-4 w-full">
+                <Text className="text-neutral-300 mb-3 text-xs font-medium tracking-wide">
                     SPICE LEVEL
                 </Text>
-                <View className="flex-row flex-wrap gap-3">
+                <View className="flex-row flex-wrap">
                     {[
                         { label: "Not Spicy", emoji: "😊" },
                         { label: "Mild", emoji: "🌶️" },
@@ -296,7 +504,7 @@ function StepThree({
                         <TouchableOpacity
                             key={sp.label}
                             onPress={() => setSpicePreference(sp.label)}
-                            className={`px-5 py-3 rounded-2xl border-2 flex-row items-center ${
+                            className={`px-4 py-3 mr-2 mb-2 rounded-2xl border-2 flex-row items-center ${
                                 spicePreference === sp.label
                                     ? "bg-emerald-400 border-emerald-400"
                                     : "bg-neutral-900/50 border-white/10"
@@ -304,7 +512,7 @@ function StepThree({
                         >
                             <Text className="mr-2 text-base">{sp.emoji}</Text>
                             <Text
-                                className={`font-semibold text-base ${
+                                className={`font-semibold text-sm ${
                                     spicePreference === sp.label ? "text-black" : "text-white"
                                 }`}
                             >
@@ -315,23 +523,23 @@ function StepThree({
                 </View>
             </View>
 
-            <View className="mt-8">
-                <Text className="text-neutral-300 mb-3 text-sm font-medium tracking-wide">
+            <View className="mt-4 w-full">
+                <Text className="text-neutral-300 mb-3 text-xs font-medium tracking-wide">
                     DIETARY RESTRICTIONS (OPTIONAL)
                 </Text>
-                <View className="flex-row flex-wrap gap-3">
+                <View className="flex-row flex-wrap">
                     {["Lactose", "Gluten", "Peanut", "Soy"].map((r) => (
                         <TouchableOpacity
                             key={r}
                             onPress={() => toggle(dietaryRestrictions, r, setDietaryRestrictions)}
-                            className={`px-5 py-3 rounded-2xl border-2 ${
+                            className={`px-4 py-3 mr-2 mb-2 rounded-2xl border-2 ${
                                 dietaryRestrictions.includes(r)
                                     ? "bg-emerald-400 border-emerald-400"
                                     : "bg-neutral-900/50 border-white/10"
                             }`}
                         >
                             <Text
-                                className={`font-semibold text-base ${
+                                className={`font-semibold text-sm ${
                                     dietaryRestrictions.includes(r) ? "text-black" : "text-white"
                                 }`}
                             >
@@ -344,7 +552,7 @@ function StepThree({
                 <TextInput
                     placeholder="Any other allergens?"
                     placeholderTextColor="#6B7280"
-                    className="mt-4 bg-neutral-900/80 rounded-2xl px-5 py-4 text-white text-base border border-white/5"
+                    className="mt-3 w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                     value={otherAllergens}
                     onChangeText={setOtherAllergens}
                     autoCorrect={false}
@@ -354,7 +562,7 @@ function StepThree({
     );
 }
 
-/* ------------------------------ Step Four ------------------------------- */
+/* ------------------------------ Step Five -------------------------------- */
 type StepFourProps = {
     foodDislikes: string;
     setFoodDislikes: (v: string) => void;
@@ -375,16 +583,18 @@ function StepFour({
 
     return (
         <Card>
-            <Text className="text-white text-3xl font-bold mb-8">Food & Cuisine</Text>
+            <Text allowFontScaling={false} className="text-white text-2xl font-extrabold mb-6">
+                Food & Cuisine
+            </Text>
 
-            <View className="mb-6">
-                <Text className="text-neutral-300 mb-2 text-sm font-medium tracking-wide">
+            <View className="mb-4 w-full">
+                <Text className="text-neutral-300 mb-2 text-xs font-medium tracking-wide">
                     FOOD DISLIKES (OPTIONAL)
                 </Text>
                 <TextInput
                     placeholder="e.g., mushrooms, broccoli..."
                     placeholderTextColor="#6B7280"
-                    className="bg-neutral-900/80 rounded-2xl px-5 py-4 text-white text-base border border-white/5"
+                    className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                     value={foodDislikes}
                     onChangeText={setFoodDislikes}
                     multiline
@@ -393,8 +603,8 @@ function StepFour({
                 />
             </View>
 
-            <View className="mt-8">
-                <Text className="text-neutral-300 mb-4 text-sm font-medium tracking-wide">
+            <View className="mt-4 w-full">
+                <Text className="text-neutral-300 mb-3 text-xs font-medium tracking-wide">
                     CUISINE PREFERENCES
                 </Text>
                 {[
@@ -406,21 +616,21 @@ function StepFour({
                     <TouchableOpacity
                         key={cuisine.name}
                         onPress={() => toggle(cuisinePreferences, cuisine.name, setCuisinePreferences)}
-                        className="flex-row items-center mb-4 bg-neutral-900/50 rounded-2xl p-4 border border-white/5"
+                        className="flex-row items-center mb-3 bg-neutral-900/50 rounded-2xl p-4 border border-white/5"
                     >
                         <View
-                            className={`w-6 h-6 mr-4 rounded-lg border-2 items-center justify-center ${
+                            className={`w-5 h-5 mr-4 rounded-lg border-2 items-center justify-center ${
                                 cuisinePreferences.includes(cuisine.name)
                                     ? "bg-emerald-400 border-emerald-400"
                                     : "bg-transparent border-white/20"
                             }`}
                         >
                             {cuisinePreferences.includes(cuisine.name) && (
-                                <Text className="text-black font-bold text-sm">✓</Text>
+                                <Text className="text-black font-bold text-xs">✓</Text>
                             )}
                         </View>
-                        <Text className="text-xl mr-3">{cuisine.emoji}</Text>
-                        <Text className="text-white font-medium text-lg">{cuisine.name}</Text>
+                        <Text className="text-lg mr-3">{cuisine.emoji}</Text>
+                        <Text className="text-white font-medium text-base">{cuisine.name}</Text>
                     </TouchableOpacity>
                 ))}
             </View>
@@ -428,7 +638,7 @@ function StepFour({
     );
 }
 
-/* ------------------------------- Step Five ------------------------------- */
+/* ------------------------------- Step Six -------------------------------- */
 type StepFiveProps = {
     mealFrequency: string;
     setMealFrequency: (v: string) => void;
@@ -464,25 +674,27 @@ function StepFive({
                   }: StepFiveProps) {
     return (
         <Card>
-            <Text className="text-white text-3xl font-bold mb-8">Meal Planning</Text>
+            <Text allowFontScaling={false} className="text-white text-2xl font-extrabold mb-6">
+                Meal Planning
+            </Text>
 
-            <View className="mb-6">
-                <Text className="text-neutral-300 mb-3 text-sm font-medium tracking-wide">
+            <View className="mb-4 w-full">
+                <Text className="text-neutral-300 mb-3 text-xs font-medium tracking-wide">
                     DAILY MEALS
                 </Text>
-                <View className="flex-row flex-wrap gap-3">
+                <View className="flex-row flex-wrap">
                     {["3 Meals", "4 Meals", "5 Meals", "6 Meals"].map((mf) => (
                         <TouchableOpacity
                             key={mf}
                             onPress={() => setMealFrequency(mf)}
-                            className={`px-6 py-3 rounded-2xl border-2 ${
+                            className={`px-5 py-3 mr-2 mb-2 rounded-2xl border-2 ${
                                 mealFrequency === mf
                                     ? "bg-emerald-400 border-emerald-400"
                                     : "bg-neutral-900/50 border-white/10"
                             }`}
                         >
                             <Text
-                                className={`font-semibold text-base ${
+                                className={`font-semibold text-sm ${
                                     mealFrequency === mf ? "text-black" : "text-white"
                                 }`}
                             >
@@ -493,25 +705,25 @@ function StepFive({
                 </View>
             </View>
 
-            <View className="mt-6">
-                <Text className="text-neutral-300 mb-3 text-sm font-medium tracking-wide">
+            <View className="mt-2 w-full">
+                <Text className="text-neutral-300 mb-3 text-xs font-medium tracking-wide">
                     EATING WINDOW (OPTIONAL)
                 </Text>
                 <TextInput
                     placeholder="e.g., 12pm – 8pm"
                     placeholderTextColor="#6B7280"
-                    className="bg-neutral-900/80 rounded-2xl px-5 py-4 text-white text-base border border-white/5"
+                    className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                     value={eatingWindow}
                     onChangeText={setEatingWindow}
                     autoCorrect={false}
                 />
             </View>
 
-            <View className="mt-8 bg-neutral-900/50 rounded-2xl p-5 border border-white/5">
-                <View className="flex-row items-center justify-between mb-5">
-                    <View>
-                        <Text className="text-white font-bold text-lg">Use Macro Calculator</Text>
-                        <Text className="text-neutral-400 text-sm mt-1">Auto-calculate your macros</Text>
+            <View className="mt-5 w-full bg-neutral-900/50 rounded-2xl p-4 border border-white/5">
+                <View className="flex-row items-center justify-between">
+                    <View style={{ flexShrink: 1 }}>
+                        <Text className="text-white font-bold text-base">Use Macro Calculator</Text>
+                        <Text className="text-neutral-400 text-xs mt-1">Auto-calculate your macros</Text>
                     </View>
                     <Switch
                         value={useMacroCalculator}
@@ -522,8 +734,8 @@ function StepFive({
                 </View>
             </View>
 
-            <View className="mt-6 space-y-4">
-                <Text className="text-neutral-300 mb-3 text-sm font-medium tracking-wide">
+            <View className="mt-5 w-full">
+                <Text className="text-neutral-300 mb-3 text-xs font-medium tracking-wide">
                     DAILY TARGETS
                 </Text>
                 {[
@@ -532,18 +744,18 @@ function StepFive({
                     { label: "Carbs", placeholder: "e.g., 250", state: carbs, set: setCarbs, unit: "g" },
                     { label: "Fat", placeholder: "e.g., 70", state: fat, set: setFat, unit: "g" },
                 ].map((field, idx) => (
-                    <View key={idx} className={idx > 0 ? "mt-4" : ""}>
+                    <View key={idx} className="w-full mb-3">
                         <View className="flex-row items-center justify-between mb-2">
-                            <Text className="text-neutral-300 text-sm font-medium tracking-wide">
+                            <Text className="text-neutral-300 text-xs font-medium tracking-wide">
                                 {field.label.toUpperCase()}
                             </Text>
-                            <Text className="text-emerald-400 text-xs font-semibold">{field.unit}</Text>
+                            <Text className="text-emerald-400 text-[10px] font-semibold">{field.unit}</Text>
                         </View>
                         <TextInput
                             placeholder={field.placeholder}
                             placeholderTextColor="#6B7280"
                             keyboardType="numeric"
-                            className="bg-neutral-900/80 rounded-2xl px-5 py-4 text-white text-lg border border-white/5"
+                            className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                             value={field.state}
                             onChangeText={field.set}
                             autoCorrect={false}
@@ -566,22 +778,30 @@ export default function Register() {
     // ========= FORM STATE =========
     const [name, setName] = useState("");
     const [phoneNumber, setPhoneNumber] = useState(""); // +91XXXXXXXXXX
-    const [address, setAddress] = useState("");
 
+    // Personal
     const [gender, setGender] = useState("");
     const [age, setAge] = useState("");
     const [height, setHeight] = useState("");
     const [weight, setWeight] = useState("");
     const [fitnessGoal, setFitnessGoal] = useState("");
 
+    // Address (split fields)
+    const [flatNo, setFlatNo] = useState("");
+    const [block, setBlock] = useState("");
+    const [apartment, setApartment] = useState("");
+
+    // Diet prefs
     const [dietType, setDietType] = useState("");
     const [spicePreference, setSpicePreference] = useState("");
     const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
     const [otherAllergens, setOtherAllergens] = useState("");
 
+    // Food & Cuisine
     const [foodDislikes, setFoodDislikes] = useState("");
     const [cuisinePreferences, setCuisinePreferences] = useState<string[]>([]);
 
+    // Meal planning
     const [mealFrequency, setMealFrequency] = useState("");
     const [eatingWindow, setEatingWindow] = useState("");
     const [useMacroCalculator, setUseMacroCalculator] = useState(false);
@@ -590,10 +810,48 @@ export default function Register() {
     const [carbs, setCarbs] = useState("");
     const [fat, setFat] = useState("");
 
+    // ========= LOCATION =========
+    const [latitude, setLatitude] = useState<number | null>(null);
+    const [longitude, setLongitude] = useState<number | null>(null);
+    const [locLoading, setLocLoading] = useState(false);
+
+    const onPickLocation = async () => {
+        try {
+            setLocLoading(true);
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== "granted") {
+                Alert.alert(
+                    "Permission needed",
+                    "Location permission is required to auto-fill your coordinates."
+                );
+                return;
+            }
+
+            const pos = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+            });
+
+            setLatitude(pos.coords.latitude);
+            setLongitude(pos.coords.longitude);
+            Alert.alert(
+                "Location captured",
+                `Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)}`
+            );
+        } catch (e: any) {
+            Alert.alert("Location Error", e?.message ?? "Could not get your location.");
+        } finally {
+            setLocLoading(false);
+        }
+    };
+
     // ========= VALIDATION =========
     const nameValid = useMemo(() => name.trim().length >= 2, [name]);
     const phoneValid = useMemo(() => /^(\+91\d{10})$/.test(phoneNumber.trim()), [phoneNumber]);
-    const addressValid = useMemo(() => address.trim().length > 4, [address]);
+
+    const addressValid = useMemo(() => {
+        return flatNo.trim().length > 0 && block.trim().length > 0 && apartment.trim().length > 0;
+    }, [flatNo, block, apartment]);
+
     const canSubmit = nameValid && phoneValid && addressValid && !submitting;
 
     // ========= API SUBMIT =========
@@ -606,10 +864,12 @@ export default function Register() {
 
             setSubmitting(true);
 
+            const prettyAddress = `${flatNo.trim()}, ${block.trim()}, ${apartment.trim()}`;
+
             const payload: any = {
                 name: name.trim(),
                 phoneNumber: phoneNumber.trim(),
-                addresses: [address.trim()],
+                addresses: [prettyAddress],
                 gender: gender || undefined,
                 age: age ? Number(age) : undefined,
                 height: height ? Number(height) : undefined,
@@ -634,6 +894,10 @@ export default function Register() {
                 fat: fat ? Number(fat) : undefined,
             };
 
+            if (latitude != null && longitude != null) {
+                payload.location = { latitude, longitude };
+            }
+
             const res = await fetch("https://calorieboy.onrender.com/api/users/signup", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -655,7 +919,6 @@ export default function Register() {
         }
     };
 
-    // Keep the step list as stable values
     const steps = [
         <StepOne
             key="s1"
@@ -665,9 +928,6 @@ export default function Register() {
             phoneNumber={phoneNumber}
             setPhoneNumber={setPhoneNumber}
             phoneValid={phoneValid}
-            address={address}
-            setAddress={setAddress}
-            addressValid={addressValid}
         />,
         <StepTwo
             key="s2"
@@ -681,6 +941,20 @@ export default function Register() {
             setWeight={setWeight}
             fitnessGoal={fitnessGoal}
             setFitnessGoal={setFitnessGoal}
+        />,
+        <StepAddress
+            key="sAddr"
+            flatNo={flatNo}
+            setFlatNo={setFlatNo}
+            block={block}
+            setBlock={setBlock}
+            apartment={apartment}
+            setApartment={setApartment}
+            addressValid={addressValid}
+            onPickLocation={onPickLocation}
+            locLoading={locLoading}
+            latitude={latitude}
+            longitude={longitude}
         />,
         <StepThree
             key="s3"
@@ -727,74 +1001,98 @@ export default function Register() {
         >
             <StatusBar barStyle="light-content" />
 
-            {/* Decorative background blobs */}
+            {/* Decorative background blobs (kept subtle) */}
             <View pointerEvents="none">
                 <View
-                    className="absolute top-0 right-0 h-56 w-56 rounded-full bg-emerald-500/10"
-                    style={{ top: -80, right: -80 }}
+                    className="absolute top-0 right-0 h-48 w-48 rounded-full bg-emerald-500/10"
+                    style={{ top: -60, right: -60 }}
                 />
                 <View
-                    className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-emerald-500/5"
-                    style={{ bottom: -100, left: -100 }}
+                    className="absolute bottom-0 left-0 h-56 w-56 rounded-full bg-emerald-500/5"
+                    style={{ bottom: -80, left: -80 }}
                 />
             </View>
 
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
+                className="flex-1"
+            >
                 <ScrollView
-                    className="flex-1 px-6"
-                    contentContainerStyle={{ paddingVertical: 40 }}
+                    className="flex-1"
+                    contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 16 }}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                 >
                     {/* Hero */}
-                    <View className="items-center mb-12">
-                        <View className="mb-4">
-                            <Text className="text-white text-6xl font-extrabold tracking-tight">CalorieBoy</Text>
-                            <View className="h-1.5 bg-emerald-400 rounded-full mt-3 w-24 self-center" />
+                    <View className="items-center mb-8 px-2 w-full">
+                        <View className="mb-3 items-center w-full">
+                            <Text
+                                allowFontScaling={false}
+                                className="text-white text-4xl font-extrabold tracking-tight text-center w-full"
+                            >
+                                CalorieBoy
+                            </Text>
+                            <View className="h-1 bg-emerald-400 rounded-full mt-3 w-20" />
                         </View>
 
-                        <Text className="text-white text-3xl font-bold mb-4">Sign Up</Text>
+                        <Text
+                            allowFontScaling={false}
+                            className="text-white text-xl font-bold mb-4 text-center"
+                        >
+                            Sign Up
+                        </Text>
 
-                        {/* Progress */}
-                        <View className="flex-row items-center">
-                            {steps.map((_, idx) => (
-                                <View key={idx} className="flex-row items-center">
-                                    <View
-                                        className={`w-10 h-10 rounded-full items-center justify-center ${
-                                            idx === step ? "bg-emerald-400" : idx < step ? "bg-emerald-400/30" : "bg-neutral-800"
-                                        }`}
-                                    >
-                                        <Text className={`font-bold ${idx === step ? "text-black" : "text-white"}`}>
-                                            {idx + 1}
-                                        </Text>
+                        {/* Progress (horizontal scroll to avoid overflow) */}
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={{ alignItems: "center", paddingHorizontal: 6 }}
+                            className="w-full"
+                        >
+                            <View className="flex-row items-center">
+                                {steps.map((_, idx) => (
+                                    <View key={idx} className="flex-row items-center">
+                                        <View
+                                            className={`w-8 h-8 rounded-full items-center justify-center ${
+                                                idx === step
+                                                    ? "bg-emerald-400"
+                                                    : idx < step
+                                                        ? "bg-emerald-400/30"
+                                                        : "bg-neutral-800"
+                                            }`}
+                                        >
+                                            <Text className={`font-bold text-xs ${idx === step ? "text-black" : "text-white"}`}>
+                                                {idx + 1}
+                                            </Text>
+                                        </View>
+                                        {idx < steps.length - 1 && (
+                                            <View className={`w-6 h-1 mx-1 ${idx < step ? "bg-emerald-400/30" : "bg-neutral-800"}`} />
+                                        )}
                                     </View>
-                                    {idx < steps.length - 1 && (
-                                        <View className={`w-8 h-1 mx-1 ${idx < step ? "bg-emerald-400/30" : "bg-neutral-800"}`} />
-                                    )}
-                                </View>
-                            ))}
-                        </View>
+                                ))}
+                            </View>
+                        </ScrollView>
 
-                        <Text className="text-neutral-400 text-base mt-3">
+                        <Text className="text-neutral-400 text-xs mt-2">
                             Step {step + 1} of {steps.length}
                         </Text>
                     </View>
 
                     {/* Current Step */}
-                    {steps[step]}
+                    <View className="w-full">{steps[step]}</View>
                 </ScrollView>
 
-                {/* Navigation */}
-                <View className="px-6 pb-8 bg-black border-t border-white/5">
-                    <View className="flex-row justify-between items-center pt-6">
+                {/* Navigation (fixed, safe) */}
+                <View className="px-4 pb-6 bg-black border-t border-white/5">
+                    <View className="flex-row justify-between items-center pt-4">
                         {step > 0 ? (
                             <TouchableOpacity
                                 onPress={() => setStep(step - 1)}
-                                className="flex-1 mr-3 px-6 py-5 bg-neutral-800 rounded-2xl border border-white/10"
+                                className="flex-1 mr-3 px-6 py-4 bg-neutral-800 rounded-2xl border border-white/10"
                                 activeOpacity={0.8}
                                 disabled={submitting}
                             >
-                                <Text className="text-white font-bold text-center text-lg">← Previous</Text>
+                                <Text className="text-white font-bold text-center text-base">← Previous</Text>
                             </TouchableOpacity>
                         ) : (
                             <View className="flex-1 mr-3" />
@@ -803,34 +1101,36 @@ export default function Register() {
                         {step < steps.length - 1 ? (
                             <TouchableOpacity
                                 onPress={() => setStep(step + 1)}
-                                className="flex-1 ml-3 px-6 py-5 bg-white rounded-2xl"
+                                className="flex-1 ml-3 px-6 py-4 bg-white rounded-2xl"
                                 activeOpacity={0.8}
                                 style={{
                                     shadowColor: "#fff",
-                                    shadowOpacity: 0.3,
-                                    shadowRadius: 12,
+                                    shadowOpacity: 0.25,
+                                    shadowRadius: 10,
                                     shadowOffset: { width: 0, height: 6 },
                                     elevation: 8,
                                 }}
                                 disabled={submitting}
                             >
-                                <Text className="text-black font-bold text-center text-lg">Next →</Text>
+                                <Text className="text-black font-bold text-center text-base">Next →</Text>
                             </TouchableOpacity>
                         ) : (
                             <TouchableOpacity
                                 onPress={onSubmit}
-                                className={`flex-1 ml-3 px-6 py-5 rounded-2xl ${canSubmit ? "bg-emerald-400" : "bg-emerald-400/40"}`}
+                                className={`flex-1 ml-3 px-6 py-4 rounded-2xl ${
+                                    canSubmit ? "bg-emerald-400" : "bg-emerald-400/40"
+                                }`}
                                 activeOpacity={0.8}
                                 disabled={!canSubmit}
                                 style={{
                                     shadowColor: "#10b981",
-                                    shadowOpacity: 0.4,
-                                    shadowRadius: 12,
+                                    shadowOpacity: 0.35,
+                                    shadowRadius: 10,
                                     shadowOffset: { width: 0, height: 6 },
                                     elevation: 8,
                                 }}
                             >
-                                <Text className="text-black font-bold text-center text-lg">
+                                <Text className="text-black font-bold text-center text-base">
                                     {submitting ? "Submitting…" : "Submit ✓"}
                                 </Text>
                             </TouchableOpacity>
