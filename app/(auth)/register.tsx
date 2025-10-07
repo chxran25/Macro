@@ -16,6 +16,8 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { Picker } from "@react-native-picker/picker";
+import { buildAddressObj, mealFrequencyToNumber } from "../../types/user";
+
 
 /* ----------------------------- Reusable Card ----------------------------- */
 const Card = ({ children }: { children: React.ReactNode }) => (
@@ -210,8 +212,8 @@ function NumberStepper({
 }
 
 type StepTwoProps = {
-    gender: string;
-    setGender: (v: string) => void;
+    gender: "Man" | "Woman";
+    setGender: React.Dispatch<React.SetStateAction<"Man" | "Woman">>;
     age: string;
     setAge: (v: string) => void;
     height: string;
@@ -221,6 +223,7 @@ type StepTwoProps = {
     fitnessGoal: string;
     setFitnessGoal: (v: string) => void;
 };
+
 
 function StepTwo({
                      gender,
@@ -779,8 +782,8 @@ export default function Register() {
     const [name, setName] = useState("");
     const [phoneNumber, setPhoneNumber] = useState(""); // +91XXXXXXXXXX
 
-    // Personal
-    const [gender, setGender] = useState("");
+    // Personal (set gender default to a valid value)
+    const [gender, setGender] = useState<"Man" | "Woman">("Man");
     const [age, setAge] = useState("");
     const [height, setHeight] = useState("");
     const [weight, setWeight] = useState("");
@@ -847,18 +850,39 @@ export default function Register() {
     // ========= VALIDATION =========
     const nameValid = useMemo(() => name.trim().length >= 2, [name]);
     const phoneValid = useMemo(() => /^(\+91\d{10})$/.test(phoneNumber.trim()), [phoneNumber]);
-
     const addressValid = useMemo(() => {
         return flatNo.trim().length > 0 && block.trim().length > 0 && apartment.trim().length > 0;
     }, [flatNo, block, apartment]);
 
-    const canSubmit = nameValid && phoneValid && addressValid && !submitting;
+    // ---- required fields check (matches backend error list) ----
+    const requiredCheck = () => {
+        const missing: string[] = [];
+        if (!name.trim()) missing.push("name");
+        if (!/^\+91\d{10}$/.test(phoneNumber.trim())) missing.push("phoneNumber");
+        if (!(flatNo.trim() && block.trim() && apartment.trim())) missing.push("addresses");
+        if (!gender) missing.push("gender");
+        if (!fitnessGoal) missing.push("fitnessGoal");
+        if (!dietType) missing.push("dietType");
+        if (!spicePreference) missing.push("spicePreference");
+        if (!cuisinePreferences.length) missing.push("cuisinePreferences");
+        const mfNum = mealFrequencyToNumber(mealFrequency);
+        if (!Number.isFinite(mfNum) || mfNum <= 0) missing.push("mealFrequency");
+        const n = (s: string) => Number.isFinite(Number(s)) && Number(s) > 0;
+        if (!n(calories)) missing.push("calories");
+        if (!n(protein)) missing.push("protein");
+        if (!n(carbs)) missing.push("carbs");
+        if (!n(fat)) missing.push("fat");
+        return missing;
+    };
+
+    const canSubmit = requiredCheck().length === 0 && !submitting;
 
     // ========= API SUBMIT =========
     const onSubmit = async () => {
         try {
-            if (!nameValid || !phoneValid || !addressValid) {
-                Alert.alert("Error", "Please fill the required fields correctly.");
+            const missing = requiredCheck();
+            if (missing.length) {
+                Alert.alert("Missing required", `Please fill: ${missing.join(", ")}`);
                 return;
             }
 
@@ -869,34 +893,43 @@ export default function Register() {
             const payload: any = {
                 name: name.trim(),
                 phoneNumber: phoneNumber.trim(),
-                addresses: [prettyAddress],
-                gender: gender || undefined,
+
+                // ⬇️ addresses must be objects
+                addresses: [buildAddressObj(flatNo, block, apartment)],
+
+                // ⬇️ server expects "Man" | "Woman" (keep your UI value)
+                gender, // no mapping to "male"/"female"
+
+                fitnessGoal,
+                dietType,
+                spicePreference,
+                cuisinePreferences,
+
+                // ⬇️ number, not "3 Meals"
+                mealFrequency: mealFrequencyToNumber(mealFrequency),
+
+                useMacroCalculator,
+                calories: Number(calories),
+                protein: Number(protein),
+                carbs: Number(carbs),
+                fat: Number(fat),
+
+                // optional
                 age: age ? Number(age) : undefined,
                 height: height ? Number(height) : undefined,
                 weight: weight ? Number(weight) : undefined,
-                fitnessGoal: fitnessGoal || undefined,
-
-                dietType: dietType || undefined,
-                spicePreference: spicePreference || undefined,
-                dietaryRestrictions: dietaryRestrictions.length > 0 ? dietaryRestrictions : undefined,
+                dietaryRestrictions: dietaryRestrictions.length ? dietaryRestrictions : undefined,
                 otherAllergens: otherAllergens?.trim() || undefined,
-
                 foodDislikes: foodDislikes?.trim() || undefined,
-                cuisinePreferences: cuisinePreferences.length > 0 ? cuisinePreferences : undefined,
-
-                mealFrequency: mealFrequency || undefined,
-                eatingWindow: eatingWindow || undefined,
-                useMacroCalculator,
-
-                calories: calories ? Number(calories) : undefined,
-                protein: protein ? Number(protein) : undefined,
-                carbs: carbs ? Number(carbs) : undefined,
-                fat: fat ? Number(fat) : undefined,
+                eatingWindow: eatingWindow?.trim() || undefined,
+                ...(latitude != null && longitude != null
+                    ? { location: { latitude, longitude } }
+                    : {}),
             };
 
-            if (latitude != null && longitude != null) {
-                payload.location = { latitude, longitude };
-            }
+
+            // debug exactly what is being sent
+            console.log("SIGNUP payload >", payload);
 
             const res = await fetch("https://calorieboy.onrender.com/api/users/signup", {
                 method: "POST",
@@ -904,8 +937,18 @@ export default function Register() {
                 body: JSON.stringify(payload),
             });
 
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data?.error || "Signup failed");
+            const text = await res.text();
+            let data: any = {};
+            try {
+                data = JSON.parse(text);
+            } catch {
+                data = { raw: text };
+            }
+
+            if (!res.ok) {
+                console.log("SIGNUP error >", res.status, data);
+                throw new Error(data?.error || `Signup failed (${res.status})`);
+            }
 
             Alert.alert("OTP Sent", "Please verify your phone number.");
             router.push({
