@@ -16,7 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { Picker } from "@react-native-picker/picker";
-import { buildAddressObj, mealFrequencyToNumber } from "../../types/user";
+import { mealFrequencyToNumber } from "../../types/user";
 
 
 /* ----------------------------- Reusable Card ----------------------------- */
@@ -895,7 +895,14 @@ export default function Register() {
                 phoneNumber: phoneNumber.trim(),
 
                 // ⬇️ addresses must be objects
-                addresses: [buildAddressObj(flatNo, block, apartment)],
+                addresses: [
+                    {
+                        flatNo: flatNo.trim(),
+                        block: block.trim(),
+                        apartment: apartment.trim(),
+                    },
+                ],
+
 
                 // ⬇️ server expects "Man" | "Woman" (keep your UI value)
                 gender, // no mapping to "male"/"female"

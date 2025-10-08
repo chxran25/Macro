@@ -1,35 +1,60 @@
-// app/api/api.ts
-import type { Meal } from "../types/meal";
+import type { Meal, WeeklyPlanResponse } from "../types/meal";
 
 const BASE = "https://calorieboy.onrender.com/api/users";
 
-/**
- * Small helper to call our API with consistent behavior.
- * - Adds JSON headers
- * - Parses JSON
- * - Surfaces backend error/message text when !ok
- */
+/** Utility to colorize logs (works in Metro console) */
+const log = {
+    info: (msg: string, ...rest: any[]) => console.log(`\x1b[36m[API INFO]\x1b[0m ${msg}`, ...rest),
+    success: (msg: string, ...rest: any[]) => console.log(`\x1b[32m[API OK]\x1b[0m ${msg}`, ...rest),
+    warn: (msg: string, ...rest: any[]) => console.warn(`\x1b[33m[API WARN]\x1b[0m ${msg}`, ...rest),
+    error: (msg: string, ...rest: any[]) => console.error(`\x1b[31m[API ERR]\x1b[0m ${msg}`, ...rest),
+};
+
+/** Generic fetch helper with logging + sane error bubbling */
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const res = await fetch(`${BASE}${path}`, {
+    const url = `${BASE}${path}`;
+    const start = Date.now();
+
+    log.info(`→ ${init.method || "GET"} ${url}`);
+
+    if (init.body) {
+        try {
+            const parsed = JSON.parse(init.body as string);
+            log.info(`📦 Payload:`, parsed);
+        } catch {
+            log.info(`📦 Raw body:`, init.body);
+        }
+    }
+
+    const res = await fetch(url, {
         headers: { "Content-Type": "application/json", ...(init.headers || {}) },
         ...init,
     });
 
-    // Try to parse JSON either way
+    const time = Date.now() - start;
+    let raw = "";
     let data: any = null;
+
     try {
-        data = await res.json();
+        raw = await res.text();
+        data = raw ? JSON.parse(raw) : null;
     } catch {
-        // ignore parse error (e.g., empty body)
+        log.warn(`⚠️ Response not JSON-parsable`);
     }
 
     if (!res.ok) {
-        // Backend for /getWeekly may send { error } or { message }
-        const msg = data?.error || data?.message || `HTTP ${res.status}`;
-        throw new Error(msg);
+        const msg = data?.error || data?.message || raw || `HTTP ${res.status}`;
+        const err = new Error(msg) as Error & { status?: number };
+        err.status = res.status;
+
+        log.error(`← ${res.status} ${url} (${time} ms):`, data || raw);
+        throw err;
     }
 
-    return data as T;
+    log.success(`← ${res.status} ${url} (${time} ms)`);
+    log.info(`✅ Response:`, data);
+
+    return (data ?? {}) as T;
 }
 
 /* =======================
@@ -38,29 +63,37 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export type SignupPayload = {
     name: string;
-    phoneNumber: string; // +91XXXXXXXXXX
-    addresses: Array<{ line1: string }>;
-    gender: string;
-    fitnessGoal: string;
-    dietType: string;
-    spicePreference: string;
+    phoneNumber: string; // "+91XXXXXXXXXX"
+    addresses: Array<{
+        flatNo: string;
+        block: string;
+        apartment: string;
+    }>;
+    gender: "Man" | "Woman";
+    fitnessGoal: "Maintain" | "Lose Fat" | "Build Muscle" | string;
+    dietType: "Veg" | "Non-Veg" | "Both" | string;
+    spicePreference: "Not Spicy" | "Mild" | "Medium" | "Spicy" | string;
     cuisinePreferences: string[];
-    mealFrequency: string;
+    mealFrequency: number; // 3 | 4 | 5 | 6
     calories: number;
     protein: number;
     carbs: number;
     fat: number;
-    // Optional extras the backend ignores gracefully
+
+    // optional
     age?: number;
-    heightCm?: number;
-    weightKg?: number;
+    height?: number;
+    weight?: number;
     dietaryRestrictions?: string[];
-    dislikes?: string;
+    otherAllergens?: string;
+    foodDislikes?: string;
     eatingWindow?: string;
+    location?: { latitude: number; longitude: number };
 };
 
 export async function signupUser(payload: SignupPayload) {
-    return request<{ message: string; otpExpiresInSeconds: number }>("/signup", {
+    log.info(`🟦 Calling /signup`);
+    return request<{ message: string; otpExpiresInSeconds?: number }>("/signup", {
         method: "POST",
         body: JSON.stringify(payload),
     });
@@ -70,29 +103,34 @@ export async function signupUser(payload: SignupPayload) {
    WEEKLY PLAN
    ======================= */
 
-// weeklyPlan.plan[day][section] = Meal[]
-export type WeeklyPlan = {
-    plan: Record<string, Record<string, Meal[]>>;
-    // allow future metadata without breaking the app
-    [k: string]: any;
-};
-
-export type WeeklyPlanResponse = {
-    userId: string;
-    name: string;
-    weeklyPlan: WeeklyPlan;
-};
-
 /**
  * Fetch user's weekly plan.
- * Backend behavior (per spec):
+ * Backend:
  * - 401 if not logged in
  * - 404 if user not found OR no weekly plan
  * - 200 with { userId, name, weeklyPlan } otherwise
  */
 export async function getWeeklyPlan(token: string) {
+    log.info(`🟧 Fetching weekly plan with token`);
     return request<WeeklyPlanResponse>("/getWeekly", {
         method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+    });
+}
+
+/* =======================
+   RECOMMEND (first-time)
+   ======================= */
+
+export async function recommendWeeklyMeals(token: string) {
+    log.info(`🟨 Generating meal recommendations`);
+    return request<{
+        success: boolean;
+        message: string;
+        method?: string;
+        weekPlan?: any;
+    }>("/recommend-meals", {
+        method: "POST",
         headers: { Authorization: `Bearer ${token}` },
     });
 }

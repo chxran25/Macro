@@ -1,5 +1,3 @@
-// types/meal.ts
-
 /** ---------- Basic Macros ---------- */
 export type Macro = {
     protein: number;
@@ -7,30 +5,30 @@ export type Macro = {
     fat: number;
 };
 
-/** ---------- Single Meal ---------- */
+/** ---------- Single Meal (UI-normalized) ---------- */
 export type Meal = {
     id: string;
-    title: string;
+    title: string;                 // server may send "name" → normalize in UI if needed
     image: string;
-    macros: Macro;
+    macros: Macro;                 // server may send protein/carbs/fat → normalize in UI if needed
     calories: number;
     description?: string;
-    // tolerate backend extras without breaking the app
-    [k: string]: any;
+    [k: string]: any;              // tolerate server extras
 };
 
 /** ---------- Weekly Plan ---------- */
-/**
- * We keep day/section names flexible so backend can send
- * "Mon"/"Monday" etc. without forcing a strict enum.
- */
-export type DayKey = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun" | string;
-export type SectionName = "Breakfast" | "Lunch" | "Snacks" | "Dinner" | string;
+export type DayKey = string;      // e.g., "Monday", "Mon", etc.
+export type SectionName = string; // e.g., "Breakfast", "Meal 1", etc.
 
-/** weeklyPlan.plan[day][section] = Meal[] */
+/**
+ * Be liberal in what we accept:
+ * weeklyPlan.plan[day][section] can be:
+ *  - Meal[]
+ *  - Record<string, Meal>  (e.g., { "Meal 1": {...}, "Meal 2": {...} })
+ *  - Meal                  (single object)
+ */
 export type WeeklyPlan = {
-    plan: Record<DayKey, Record<SectionName, Meal[]>>;
-    // optional meta
+    plan: Record<DayKey, Record<SectionName, Meal[] | Record<string, Meal> | Meal>>;
     [k: string]: any;
 };
 
