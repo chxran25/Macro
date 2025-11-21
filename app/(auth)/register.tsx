@@ -818,34 +818,41 @@ export default function Register() {
     const [longitude, setLongitude] = useState<number | null>(null);
     const [locLoading, setLocLoading] = useState(false);
 
+    // const onPickLocation = async () => {
+    //     try {
+    //         setLocLoading(true);
+    //         const { status } = await Location.requestForegroundPermissionsAsync();
+    //         if (status !== "granted") {
+    //             Alert.alert(
+    //                 "Permission needed",
+    //                 "Location permission is required to auto-fill your coordinates."
+    //             );
+    //             return;
+    //         }
+    //
+    //         const pos = await Location.getCurrentPositionAsync({
+    //             accuracy: Location.Accuracy.Balanced,
+    //         });
+    //
+    //         setLatitude(pos.coords.latitude);
+    //         setLongitude(pos.coords.longitude);
+    //         Alert.alert(
+    //             "Location captured",
+    //             `Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)}`
+    //         );
+    //     } catch (e: any) {
+    //         Alert.alert("Location Error", e?.message ?? "Could not get your location.");
+    //     } finally {
+    //         setLocLoading(false);
+    //     }
+    // };
     const onPickLocation = async () => {
-        try {
-            setLocLoading(true);
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== "granted") {
-                Alert.alert(
-                    "Permission needed",
-                    "Location permission is required to auto-fill your coordinates."
-                );
-                return;
-            }
-
-            const pos = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Balanced,
-            });
-
-            setLatitude(pos.coords.latitude);
-            setLongitude(pos.coords.longitude);
-            Alert.alert(
-                "Location captured",
-                `Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)}`
-            );
-        } catch (e: any) {
-            Alert.alert("Location Error", e?.message ?? "Could not get your location.");
-        } finally {
-            setLocLoading(false);
-        }
+        Alert.alert(
+            "Location disabled (debug)",
+            "Location capture is temporarily turned off while we debug a crash."
+        );
     };
+
 
     // ========= VALIDATION =========
     const nameValid = useMemo(() => name.trim().length >= 2, [name]);
