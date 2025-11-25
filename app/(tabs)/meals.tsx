@@ -56,23 +56,25 @@ export default function Meals() {
                     return;
                 }
 
-                // Fetch ONLY the saved weekly plan here.
-                const res = await getWeeklyPlan(token);
+                const res = await getWeeklyPlan(token); // may be null now
+                if (!res) {
+                    // no weekly plan yet
+                    setNeedsRecommendations(true);
+                    setData(null);
+                    return;
+                }
+
                 setData(res);
-                const dayKeys = Object.keys(res?.weeklyPlan?.plan || {});
+                const dayKeys = Object.keys(res.weeklyPlan?.plan || {});
                 if (dayKeys.length > 0) setSelectedDay(dayKeys[0]);
             } catch (e: any) {
-                // If the user has no plan yet, guide them to the recommendations page
-                if (e?.status === 404) {
-                    setNeedsRecommendations(true);
-                } else {
-                    setErrMsg(e?.message || "Failed to fetch weekly plan.");
-                }
+                setErrMsg(e?.message || "Failed to fetch weekly plan.");
             } finally {
                 setLoading(false);
             }
         })();
     }, []);
+
 
     const days = useMemo<string[]>(
         () => Object.keys(data?.weeklyPlan?.plan || {}),

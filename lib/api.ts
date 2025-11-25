@@ -1,4 +1,5 @@
-import type { Meal, WeeklyPlanResponse } from "../types/meal";
+// lib/api.ts
+import type { WeeklyPlanResponse } from "../types/meal";
 
 const BASE = "https://calorieboy.onrender.com/api/users";
 
@@ -43,7 +44,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
 
     if (!res.ok) {
-        const msg = data?.error || data?.message || raw || `HTTP ${res.status}`;
+        const looksLikeHtml = typeof raw === "string" && raw.trim().startsWith("<!DOCTYPE html");
+        const msg =
+            data?.error ||
+            data?.message ||
+            (looksLikeHtml ? `HTTP ${res.status} ${res.statusText || ""}`.trim() : raw || `HTTP ${res.status}`);
+
         const err = new Error(msg) as Error & { status?: number };
         err.status = res.status;
 
@@ -105,17 +111,44 @@ export async function signupUser(payload: SignupPayload) {
 
 /**
  * Fetch user's weekly plan.
+ *
  * Backend:
- * - 401 if not logged in
- * - 404 if user not found OR no weekly plan
- * - 200 with { userId, name, weeklyPlan } otherwise
+ * - 401 → not logged in
+ * - 404 + { error: "User not found" }           → real error
+ * - 404 + { message: "No weekly plan ..." }     → NO PLAN YET (expected for new users)
+ * - 200 + { userId, name, weeklyPlan }          → plan exists
+ *
+ * Frontend:
+ * - returns WeeklyPlanResponse when plan exists
+ * - returns null when there is simply no plan yet
+ * - throws on all other errors
  */
-export async function getWeeklyPlan(token: string) {
+export async function getWeeklyPlan(
+    token: string
+): Promise<WeeklyPlanResponse | null> {
     log.info(`🟧 Fetching weekly plan with token`);
-    return request<WeeklyPlanResponse>("/getWeekly", {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-    });
+
+    try {
+        const result = await request<WeeklyPlanResponse>("/getWeekly", {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+        });
+
+        return result;
+    } catch (err: any) {
+        const status = err?.status;
+        const msg = err?.message || "";
+
+        if (status === 404 && msg === "No weekly plan available for this user") {
+            log.info(
+                "ℹ️ No weekly plan available for this user yet. Returning null (empty state)."
+            );
+            return null;
+        }
+
+        log.error("❌ Error fetching weekly plan:", err);
+        throw err;
+    }
 }
 
 /* =======================
@@ -124,13 +157,31 @@ export async function getWeeklyPlan(token: string) {
 
 export async function recommendWeeklyMeals(token: string) {
     log.info(`🟨 Generating meal recommendations`);
-    return request<{
-        success: boolean;
-        message: string;
-        method?: string;
-        weekPlan?: any;
-    }>("/recommend-meals", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-    });
+
+    try {
+        return await request<{
+            success: boolean;
+            message: string;
+            method?: string;
+            weekPlan?: any;
+        }>("/recommend-meals", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+        });
+    } catch (err: any) {
+        const status = err?.status;
+        const msg = err?.message || "";
+
+        // If the endpoint itself is missing / miswired, we get a 404 HTML page.
+        if (status === 404 && msg.startsWith("HTTP 404")) {
+            log.error(
+                "⚠️ /recommend-meals endpoint not found. Check backend routing (/api/users/recommend-meals)."
+            );
+            throw new Error(
+                "Recommendations service is not available right now. Please try again later."
+            );
+        }
+
+        throw err;
+    }
 }

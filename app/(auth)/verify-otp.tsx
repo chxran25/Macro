@@ -57,14 +57,17 @@ export default function VerifyOtp() {
 
             // ✅ Route based on origin
             if (from === "register") {
+                // First-time user: go to recommendations flow
                 await setOnboarded(false);
                 Alert.alert("Success", "You are now logged in!");
-                router.replace("/meals");     // was "/(tabs)/meals"
+                console.log("🟩 New user detected → Navigating to /rec_meals");
+                router.replace("/rec_meals");
             } else {
+                // Existing user login: go to main tabs
                 Alert.alert("Success", "You are now logged in!");
-                router.replace("/(tabs)");          // was "/(tabs)/index"
+                console.log("🟦 Existing user → Navigating to /(tabs)");
+                router.replace("/(tabs)");
             }
-
         } catch (e: any) {
             console.error("Verify OTP error (frontend):", e);
             Alert.alert("Error", e?.message ?? "Something went wrong during OTP verification.");

@@ -1,5 +1,5 @@
 // app/(auth)/register.tsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
     Alert,
     KeyboardAvoidingView,
@@ -14,10 +14,9 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import * as Location from "expo-location";
+// import * as Location from "expo-location";
 import { Picker } from "@react-native-picker/picker";
 import { mealFrequencyToNumber } from "../../types/user";
-
 
 /* ----------------------------- Reusable Card ----------------------------- */
 const Card = ({ children }: { children: React.ReactNode }) => (
@@ -70,7 +69,10 @@ function StepOne({
                         placeholderTextColor="#6B7280"
                         className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                         value={name}
-                        onChangeText={setName}
+                        onChangeText={(text) => {
+                            console.log("[Register] Name changed:", text);
+                            setName(text);
+                        }}
                         autoCapitalize="words"
                         autoCorrect={false}
                     />
@@ -96,14 +98,25 @@ function StepOne({
                                 className="flex-1 text-white text-base font-medium"
                                 value={phoneNumber}
                                 onChangeText={(t) => {
+                                    console.log("[Register] Raw phone input:", t);
                                     if (t === "") {
+                                        console.log("[Register] Phone cleared");
                                         setPhoneNumber("");
                                         return;
                                     }
                                     const raw = t.replace(/[^\d]/g, "");
                                     let ten = raw.startsWith("91") ? raw.slice(2) : raw;
                                     ten = ten.slice(0, 10);
-                                    setPhoneNumber(ten ? `+91${ten}` : "+91");
+                                    const finalValue = ten ? `+91${ten}` : "+91";
+                                    console.log(
+                                        "[Register] Phone cleaned:",
+                                        raw,
+                                        "=> ten:",
+                                        ten,
+                                        "=> final:",
+                                        finalValue
+                                    );
+                                    setPhoneNumber(finalValue);
                                 }}
                                 maxLength={13}
                                 autoCorrect={false}
@@ -148,12 +161,20 @@ function NumberStepper({
 }) {
     const n = Number.isFinite(Number(value)) && value !== "" ? Number(value) : NaN;
 
-    const inc = () => onChangeText(String(clamp(isNaN(n) ? min : n + step, min, max)));
-    const dec = () => onChangeText(String(clamp(isNaN(n) ? min : n - step, min, max)));
+    const inc = () => {
+        const next = String(clamp(isNaN(n) ? min : n + step, min, max));
+        console.log(`[Register] ${label} increment to:`, next);
+        onChangeText(next);
+    };
+    const dec = () => {
+        const next = String(clamp(isNaN(n) ? min : n - step, min, max));
+        console.log(`[Register] ${label} decrement to:`, next);
+        onChangeText(next);
+    };
 
     const handleBlur = () => {
-        // If empty or NaN, snap to min. Otherwise clamp into range.
         const next = value.trim() === "" ? min : clamp(Number(value), min, max);
+        console.log(`[Register] ${label} blur - clamp to:`, next);
         onChangeText(String(next));
     };
 
@@ -174,8 +195,8 @@ function NumberStepper({
                         placeholderTextColor="#6B7280"
                         value={value}
                         onChangeText={(t) => {
-                            // Allow empty to let user retype, otherwise keep digits only
                             const cleaned = t === "" ? "" : onlyDigits(t);
+                            console.log(`[Register] ${label} input:`, t, "=> cleaned:", cleaned);
                             onChangeText(cleaned);
                         }}
                         onBlur={handleBlur}
@@ -224,7 +245,6 @@ type StepTwoProps = {
     setFitnessGoal: (v: string) => void;
 };
 
-
 function StepTwo({
                      gender,
                      setGender,
@@ -249,7 +269,10 @@ function StepTwo({
                 <View className="bg-neutral-900/80 rounded-2xl border border-white/5 overflow-hidden">
                     <Picker
                         selectedValue={gender || "Man"}
-                        onValueChange={(val) => setGender(val)}
+                        onValueChange={(val) => {
+                            console.log("[Register] Gender changed:", val);
+                            setGender(val);
+                        }}
                         dropdownIconColor="#fff"
                         style={{ color: "#fff" }}
                     >
@@ -259,7 +282,6 @@ function StepTwo({
                 </View>
             </View>
 
-            {/* Age stepper (years) — range 10..100 */}
             <NumberStepper
                 label="Age"
                 unit="years"
@@ -271,7 +293,6 @@ function StepTwo({
                 maxLength={3}
             />
 
-            {/* Height stepper (cm) — range 100..240 */}
             <NumberStepper
                 label="Height"
                 unit="cm"
@@ -283,7 +304,6 @@ function StepTwo({
                 maxLength={3}
             />
 
-            {/* Weight stepper (kg) — range 20..300 */}
             <NumberStepper
                 label="Weight"
                 unit="kg"
@@ -295,7 +315,7 @@ function StepTwo({
                 maxLength={3}
             />
 
-            {/* Fitness goal chips (unchanged) */}
+            {/* Fitness goal chips */}
             <View className="mt-2 w-full">
                 <Text className="text-neutral-300 mb-3 text-xs font-medium tracking-wide">
                     FITNESS GOAL
@@ -304,7 +324,10 @@ function StepTwo({
                     {["Maintain", "Lose Fat", "Build Muscle"].map((goal) => (
                         <TouchableOpacity
                             key={goal}
-                            onPress={() => setFitnessGoal(goal)}
+                            onPress={() => {
+                                console.log("[Register] Fitness goal selected:", goal);
+                                setFitnessGoal(goal);
+                            }}
                             className={`px-5 py-3 mr-2 mb-2 rounded-2xl border-2 ${
                                 fitnessGoal === goal
                                     ? "bg-emerald-400 border-emerald-400"
@@ -326,7 +349,7 @@ function StepTwo({
     );
 }
 
-/* ------------------------------ NEW Step Three --------------------------- */
+/* ------------------------------ NEW Step Address --------------------------- */
 type StepAddressProps = {
     flatNo: string;
     setFlatNo: (v: string) => void;
@@ -370,7 +393,10 @@ function StepAddress({
                     placeholderTextColor="#6B7280"
                     className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                     value={flatNo}
-                    onChangeText={setFlatNo}
+                    onChangeText={(v) => {
+                        console.log("[Register] FlatNo changed:", v);
+                        setFlatNo(v);
+                    }}
                     autoCorrect={false}
                 />
             </View>
@@ -384,7 +410,10 @@ function StepAddress({
                     placeholderTextColor="#6B7280"
                     className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                     value={block}
-                    onChangeText={setBlock}
+                    onChangeText={(v) => {
+                        console.log("[Register] Block changed:", v);
+                        setBlock(v);
+                    }}
                     autoCorrect={false}
                 />
             </View>
@@ -398,7 +427,10 @@ function StepAddress({
                     placeholderTextColor="#6B7280"
                     className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                     value={apartment}
-                    onChangeText={setApartment}
+                    onChangeText={(v) => {
+                        console.log("[Register] Apartment changed:", v);
+                        setApartment(v);
+                    }}
                     autoCorrect={false}
                 />
             </View>
@@ -433,7 +465,7 @@ function StepAddress({
     );
 }
 
-/* ------------------------------ Step Four -------------------------------- */
+/* ------------------------------ Step Three (Diet) --------------------------- */
 type StepThreeProps = {
     dietType: string;
     setDietType: (v: string) => void;
@@ -474,7 +506,10 @@ function StepThree({
                     {["Veg", "Non-Veg", "Both"].map((dt) => (
                         <TouchableOpacity
                             key={dt}
-                            onPress={() => setDietType(dt)}
+                            onPress={() => {
+                                console.log("[Register] Diet type selected:", dt);
+                                setDietType(dt);
+                            }}
                             className={`px-5 py-3 mr-2 mb-2 rounded-2xl border-2 ${
                                 dietType === dt
                                     ? "bg-emerald-400 border-emerald-400"
@@ -506,7 +541,10 @@ function StepThree({
                     ].map((sp) => (
                         <TouchableOpacity
                             key={sp.label}
-                            onPress={() => setSpicePreference(sp.label)}
+                            onPress={() => {
+                                console.log("[Register] Spice preference selected:", sp.label);
+                                setSpicePreference(sp.label);
+                            }}
                             className={`px-4 py-3 mr-2 mb-2 rounded-2xl border-2 flex-row items-center ${
                                 spicePreference === sp.label
                                     ? "bg-emerald-400 border-emerald-400"
@@ -534,7 +572,10 @@ function StepThree({
                     {["Lactose", "Gluten", "Peanut", "Soy"].map((r) => (
                         <TouchableOpacity
                             key={r}
-                            onPress={() => toggle(dietaryRestrictions, r, setDietaryRestrictions)}
+                            onPress={() => {
+                                console.log("[Register] Toggle restriction:", r);
+                                toggle(dietaryRestrictions, r, setDietaryRestrictions);
+                            }}
                             className={`px-4 py-3 mr-2 mb-2 rounded-2xl border-2 ${
                                 dietaryRestrictions.includes(r)
                                     ? "bg-emerald-400 border-emerald-400"
@@ -557,7 +598,10 @@ function StepThree({
                     placeholderTextColor="#6B7280"
                     className="mt-3 w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                     value={otherAllergens}
-                    onChangeText={setOtherAllergens}
+                    onChangeText={(v) => {
+                        console.log("[Register] Other allergens changed:", v);
+                        setOtherAllergens(v);
+                    }}
                     autoCorrect={false}
                 />
             </View>
@@ -565,7 +609,7 @@ function StepThree({
     );
 }
 
-/* ------------------------------ Step Five -------------------------------- */
+/* ------------------------------ Step Four (Food & Cuisine) ----------------- */
 type StepFourProps = {
     foodDislikes: string;
     setFoodDislikes: (v: string) => void;
@@ -599,7 +643,10 @@ function StepFour({
                     placeholderTextColor="#6B7280"
                     className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                     value={foodDislikes}
-                    onChangeText={setFoodDislikes}
+                    onChangeText={(v) => {
+                        console.log("[Register] Food dislikes changed:", v);
+                        setFoodDislikes(v);
+                    }}
                     multiline
                     numberOfLines={3}
                     autoCorrect={false}
@@ -618,7 +665,10 @@ function StepFour({
                 ].map((cuisine) => (
                     <TouchableOpacity
                         key={cuisine.name}
-                        onPress={() => toggle(cuisinePreferences, cuisine.name, setCuisinePreferences)}
+                        onPress={() => {
+                            console.log("[Register] Toggle cuisine:", cuisine.name);
+                            toggle(cuisinePreferences, cuisine.name, setCuisinePreferences);
+                        }}
                         className="flex-row items-center mb-3 bg-neutral-900/50 rounded-2xl p-4 border border-white/5"
                     >
                         <View
@@ -641,7 +691,7 @@ function StepFour({
     );
 }
 
-/* ------------------------------- Step Six -------------------------------- */
+/* ------------------------------- Step Five (Meal Planning) ----------------- */
 type StepFiveProps = {
     mealFrequency: string;
     setMealFrequency: (v: string) => void;
@@ -689,7 +739,10 @@ function StepFive({
                     {["3 Meals", "4 Meals", "5 Meals", "6 Meals"].map((mf) => (
                         <TouchableOpacity
                             key={mf}
-                            onPress={() => setMealFrequency(mf)}
+                            onPress={() => {
+                                console.log("[Register] Meal frequency selected:", mf);
+                                setMealFrequency(mf);
+                            }}
                             className={`px-5 py-3 mr-2 mb-2 rounded-2xl border-2 ${
                                 mealFrequency === mf
                                     ? "bg-emerald-400 border-emerald-400"
@@ -717,7 +770,10 @@ function StepFive({
                     placeholderTextColor="#6B7280"
                     className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                     value={eatingWindow}
-                    onChangeText={setEatingWindow}
+                    onChangeText={(v) => {
+                        console.log("[Register] Eating window changed:", v);
+                        setEatingWindow(v);
+                    }}
                     autoCorrect={false}
                 />
             </View>
@@ -730,7 +786,10 @@ function StepFive({
                     </View>
                     <Switch
                         value={useMacroCalculator}
-                        onValueChange={setUseMacroCalculator}
+                        onValueChange={(v) => {
+                            console.log("[Register] UseMacroCalculator toggled:", v);
+                            setUseMacroCalculator(v);
+                        }}
                         trackColor={{ false: "#374151", true: "#10b981" }}
                         thumbColor={useMacroCalculator ? "#fff" : "#f4f4f5"}
                     />
@@ -760,7 +819,10 @@ function StepFive({
                             keyboardType="numeric"
                             className="w-full bg-neutral-900/80 rounded-2xl px-4 py-4 text-white text-base border border-white/5"
                             value={field.state}
-                            onChangeText={field.set}
+                            onChangeText={(v) => {
+                                console.log(`[Register] ${field.label} changed:`, v);
+                                field.set(v);
+                            }}
                             autoCorrect={false}
                         />
                     </View>
@@ -782,14 +844,14 @@ export default function Register() {
     const [name, setName] = useState("");
     const [phoneNumber, setPhoneNumber] = useState(""); // +91XXXXXXXXXX
 
-    // Personal (set gender default to a valid value)
+    // Personal
     const [gender, setGender] = useState<"Man" | "Woman">("Man");
     const [age, setAge] = useState("");
     const [height, setHeight] = useState("");
     const [weight, setWeight] = useState("");
     const [fitnessGoal, setFitnessGoal] = useState("");
 
-    // Address (split fields)
+    // Address
     const [flatNo, setFlatNo] = useState("");
     const [block, setBlock] = useState("");
     const [apartment, setApartment] = useState("");
@@ -818,41 +880,30 @@ export default function Register() {
     const [longitude, setLongitude] = useState<number | null>(null);
     const [locLoading, setLocLoading] = useState(false);
 
-    // const onPickLocation = async () => {
-    //     try {
-    //         setLocLoading(true);
-    //         const { status } = await Location.requestForegroundPermissionsAsync();
-    //         if (status !== "granted") {
-    //             Alert.alert(
-    //                 "Permission needed",
-    //                 "Location permission is required to auto-fill your coordinates."
-    //             );
-    //             return;
-    //         }
-    //
-    //         const pos = await Location.getCurrentPositionAsync({
-    //             accuracy: Location.Accuracy.Balanced,
-    //         });
-    //
-    //         setLatitude(pos.coords.latitude);
-    //         setLongitude(pos.coords.longitude);
-    //         Alert.alert(
-    //             "Location captured",
-    //             `Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)}`
-    //         );
-    //     } catch (e: any) {
-    //         Alert.alert("Location Error", e?.message ?? "Could not get your location.");
-    //     } finally {
-    //         setLocLoading(false);
-    //     }
-    // };
+    useEffect(() => {
+        console.log("[Register] Mounted");
+        console.log("[Register] mealFrequencyToNumber typeof:", typeof mealFrequencyToNumber);
+    }, []);
+
+    useEffect(() => {
+        console.log("[Register] Render step:", step, {
+            name,
+            phoneNumber,
+            gender,
+            fitnessGoal,
+            dietType,
+            mealFrequency,
+        });
+    });
+
     const onPickLocation = async () => {
+        console.log("[Register] onPickLocation pressed");
         Alert.alert(
             "Location disabled (debug)",
             "Location capture is temporarily turned off while we debug a crash."
         );
+        // If you later re-enable, also log each step in the async function.
     };
-
 
     // ========= VALIDATION =========
     const nameValid = useMemo(() => name.trim().length >= 2, [name]);
@@ -861,24 +912,47 @@ export default function Register() {
         return flatNo.trim().length > 0 && block.trim().length > 0 && apartment.trim().length > 0;
     }, [flatNo, block, apartment]);
 
-    // ---- required fields check (matches backend error list) ----
     const requiredCheck = () => {
         const missing: string[] = [];
+        const trimmedPhone = phoneNumber.trim();
+        // const mfNum = mealFrequencyToNumber(mealFrequency);
+        if (!mealFrequency) missing.push("mealFrequency");
+
+        console.log("[Register] requiredCheck() start");
+        // console.log("[Register] mealFrequency raw:", mealFrequency, "-> num:", mfNum);
+        console.log("[Register] current values:", {
+            name,
+            trimmedPhone,
+            flatNo,
+            block,
+            apartment,
+            gender,
+            fitnessGoal,
+            dietType,
+            spicePreference,
+            cuisinePreferences,
+            calories,
+            protein,
+            carbs,
+            fat,
+        });
+
         if (!name.trim()) missing.push("name");
-        if (!/^\+91\d{10}$/.test(phoneNumber.trim())) missing.push("phoneNumber");
+        if (!/^\+91\d{10}$/.test(trimmedPhone)) missing.push("phoneNumber");
         if (!(flatNo.trim() && block.trim() && apartment.trim())) missing.push("addresses");
         if (!gender) missing.push("gender");
         if (!fitnessGoal) missing.push("fitnessGoal");
         if (!dietType) missing.push("dietType");
         if (!spicePreference) missing.push("spicePreference");
         if (!cuisinePreferences.length) missing.push("cuisinePreferences");
-        const mfNum = mealFrequencyToNumber(mealFrequency);
-        if (!Number.isFinite(mfNum) || mfNum <= 0) missing.push("mealFrequency");
+        // if (!Number.isFinite(mfNum) || mfNum <= 0) missing.push("mealFrequency");
         const n = (s: string) => Number.isFinite(Number(s)) && Number(s) > 0;
         if (!n(calories)) missing.push("calories");
         if (!n(protein)) missing.push("protein");
         if (!n(carbs)) missing.push("carbs");
         if (!n(fat)) missing.push("fat");
+
+        console.log("[Register] requiredCheck() missing =>", missing);
         return missing;
     };
 
@@ -886,22 +960,20 @@ export default function Register() {
 
     // ========= API SUBMIT =========
     const onSubmit = async () => {
+        console.log("[Register] onSubmit pressed");
         try {
             const missing = requiredCheck();
             if (missing.length) {
+                console.log("[Register] onSubmit blocked, missing:", missing);
                 Alert.alert("Missing required", `Please fill: ${missing.join(", ")}`);
                 return;
             }
 
             setSubmitting(true);
 
-            const prettyAddress = `${flatNo.trim()}, ${block.trim()}, ${apartment.trim()}`;
-
             const payload: any = {
                 name: name.trim(),
                 phoneNumber: phoneNumber.trim(),
-
-                // ⬇️ addresses must be objects
                 addresses: [
                     {
                         flatNo: flatNo.trim(),
@@ -909,26 +981,17 @@ export default function Register() {
                         apartment: apartment.trim(),
                     },
                 ],
-
-
-                // ⬇️ server expects "Man" | "Woman" (keep your UI value)
-                gender, // no mapping to "male"/"female"
-
+                gender,
                 fitnessGoal,
                 dietType,
                 spicePreference,
                 cuisinePreferences,
-
-                // ⬇️ number, not "3 Meals"
                 mealFrequency: mealFrequencyToNumber(mealFrequency),
-
                 useMacroCalculator,
                 calories: Number(calories),
                 protein: Number(protein),
                 carbs: Number(carbs),
                 fat: Number(fat),
-
-                // optional
                 age: age ? Number(age) : undefined,
                 height: height ? Number(height) : undefined,
                 weight: weight ? Number(weight) : undefined,
@@ -941,9 +1004,7 @@ export default function Register() {
                     : {}),
             };
 
-
-            // debug exactly what is being sent
-            console.log("SIGNUP payload >", payload);
+            console.log("[Register] SIGNUP payload >", payload);
 
             const res = await fetch("https://calorieboy.onrender.com/api/users/signup", {
                 method: "POST",
@@ -959,6 +1020,8 @@ export default function Register() {
                 data = { raw: text };
             }
 
+            console.log("[Register] SIGNUP response status:", res.status, "body:", data);
+
             if (!res.ok) {
                 console.log("SIGNUP error >", res.status, data);
                 throw new Error(data?.error || `Signup failed (${res.status})`);
@@ -970,8 +1033,10 @@ export default function Register() {
                 params: { phone: phoneNumber.trim(), from: "register" },
             });
         } catch (e: any) {
+            console.error("[Register] onSubmit error:", e);
             Alert.alert("Error", e?.message ?? "Something went wrong.");
         } finally {
+            console.log("[Register] onSubmit finally - submitting false");
             setSubmitting(false);
         }
     };
@@ -1058,7 +1123,7 @@ export default function Register() {
         >
             <StatusBar barStyle="light-content" />
 
-            {/* Decorative background blobs (kept subtle) */}
+            {/* Decorative background blobs */}
             <View pointerEvents="none">
                 <View
                     className="absolute top-0 right-0 h-48 w-48 rounded-full bg-emerald-500/10"
@@ -1099,7 +1164,7 @@ export default function Register() {
                             Sign Up
                         </Text>
 
-                        {/* Progress (horizontal scroll to avoid overflow) */}
+                        {/* Progress */}
                         <ScrollView
                             horizontal
                             showsHorizontalScrollIndicator={false}
@@ -1118,12 +1183,22 @@ export default function Register() {
                                                         : "bg-neutral-800"
                                             }`}
                                         >
-                                            <Text className={`font-bold text-xs ${idx === step ? "text-black" : "text-white"}`}>
+                                            <Text
+                                                className={`font-bold text-xs ${
+                                                    idx === step ? "text-black" : "text-white"
+                                                }`}
+                                            >
                                                 {idx + 1}
                                             </Text>
                                         </View>
                                         {idx < steps.length - 1 && (
-                                            <View className={`w-6 h-1 mx-1 ${idx < step ? "bg-emerald-400/30" : "bg-neutral-800"}`} />
+                                            <View
+                                                className={`w-6 h-1 mx-1 ${
+                                                    idx < step
+                                                        ? "bg-emerald-400/30"
+                                                        : "bg-neutral-800"
+                                                }`}
+                                            />
                                         )}
                                     </View>
                                 ))}
@@ -1139,17 +1214,22 @@ export default function Register() {
                     <View className="w-full">{steps[step]}</View>
                 </ScrollView>
 
-                {/* Navigation (fixed, safe) */}
+                {/* Navigation */}
                 <View className="px-4 pb-6 bg-black border-t border-white/5">
                     <View className="flex-row justify-between items-center pt-4">
                         {step > 0 ? (
                             <TouchableOpacity
-                                onPress={() => setStep(step - 1)}
+                                onPress={() => {
+                                    console.log("[Register] Previous step from", step, "to", step - 1);
+                                    setStep(step - 1);
+                                }}
                                 className="flex-1 mr-3 px-6 py-4 bg-neutral-800 rounded-2xl border border-white/10"
                                 activeOpacity={0.8}
                                 disabled={submitting}
                             >
-                                <Text className="text-white font-bold text-center text-base">← Previous</Text>
+                                <Text className="text-white font-bold text-center text-base">
+                                    ← Previous
+                                </Text>
                             </TouchableOpacity>
                         ) : (
                             <View className="flex-1 mr-3" />
@@ -1157,7 +1237,10 @@ export default function Register() {
 
                         {step < steps.length - 1 ? (
                             <TouchableOpacity
-                                onPress={() => setStep(step + 1)}
+                                onPress={() => {
+                                    console.log("[Register] Next step from", step, "to", step + 1);
+                                    setStep(step + 1);
+                                }}
                                 className="flex-1 ml-3 px-6 py-4 bg-white rounded-2xl"
                                 activeOpacity={0.8}
                                 style={{
@@ -1169,7 +1252,9 @@ export default function Register() {
                                 }}
                                 disabled={submitting}
                             >
-                                <Text className="text-black font-bold text-center text-base">Next →</Text>
+                                <Text className="text-black font-bold text-center text-base">
+                                    Next →
+                                </Text>
                             </TouchableOpacity>
                         ) : (
                             <TouchableOpacity
