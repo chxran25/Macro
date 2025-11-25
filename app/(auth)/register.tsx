@@ -1,5 +1,5 @@
 // app/(auth)/register.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     Alert,
     KeyboardAvoidingView,
@@ -14,9 +14,9 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-// import * as Location from "expo-location";
+import * as Location from "expo-location";
 import { Picker } from "@react-native-picker/picker";
-import { mealFrequencyToNumber } from "../../types/user";
+import { mealFrequencyToNumber, buildAddressObj } from "../../types/user";
 
 /* ----------------------------- Reusable Card ----------------------------- */
 const Card = ({ children }: { children: React.ReactNode }) => (
@@ -152,7 +152,7 @@ function NumberStepper({
                        }: {
     label: string;
     unit?: string;
-    value: string; // keep as string so we can allow temporary blank while typing
+    value: string;
     onChangeText: (s: string) => void;
     min: number;
     max: number;
@@ -842,7 +842,7 @@ export default function Register() {
 
     // ========= FORM STATE =========
     const [name, setName] = useState("");
-    const [phoneNumber, setPhoneNumber] = useState(""); // +91XXXXXXXXXX
+    const [phoneNumber, setPhoneNumber] = useState("");
 
     // Personal
     const [gender, setGender] = useState<"Man" | "Woman">("Man");
@@ -898,28 +898,52 @@ export default function Register() {
 
     const onPickLocation = async () => {
         console.log("[Register] onPickLocation pressed");
-        Alert.alert(
-            "Location disabled (debug)",
-            "Location capture is temporarily turned off while we debug a crash."
-        );
-        // If you later re-enable, also log each step in the async function.
+        try {
+            setLocLoading(true);
+
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            console.log("[Register] Location permission status:", status);
+
+            if (status !== "granted") {
+                Alert.alert(
+                    "Permission denied",
+                    "Location access was denied. You can still sign up without sharing your location."
+                );
+                return;
+            }
+
+            const position = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+            });
+
+            console.log("[Register] Location coords:", position.coords);
+
+            setLatitude(position.coords.latitude);
+            setLongitude(position.coords.longitude);
+        } catch (e: any) {
+            console.error("[Register] onPickLocation error:", e);
+            Alert.alert(
+                "Location error",
+                "Could not fetch your location. You can still sign up without it."
+            );
+        } finally {
+            setLocLoading(false);
+        }
     };
 
     // ========= VALIDATION =========
-    const nameValid = useMemo(() => name.trim().length >= 2, [name]);
-    const phoneValid = useMemo(() => /^(\+91\d{10})$/.test(phoneNumber.trim()), [phoneNumber]);
-    const addressValid = useMemo(() => {
-        return flatNo.trim().length > 0 && block.trim().length > 0 && apartment.trim().length > 0;
-    }, [flatNo, block, apartment]);
+    const nameValid = name.trim().length >= 2;
+    const phoneValid = /^\+91\d{10}$/.test(phoneNumber.trim());
+    const addressValid =
+        flatNo.trim().length > 0 && block.trim().length > 0 && apartment.trim().length > 0;
 
     const requiredCheck = () => {
         const missing: string[] = [];
         const trimmedPhone = phoneNumber.trim();
-        // const mfNum = mealFrequencyToNumber(mealFrequency);
-        if (!mealFrequency) missing.push("mealFrequency");
+        const mfNum = mealFrequencyToNumber(mealFrequency);
 
         console.log("[Register] requiredCheck() start");
-        // console.log("[Register] mealFrequency raw:", mealFrequency, "-> num:", mfNum);
+        console.log("[Register] mealFrequency raw:", mealFrequency, "-> num:", mfNum);
         console.log("[Register] current values:", {
             name,
             trimmedPhone,
@@ -945,7 +969,9 @@ export default function Register() {
         if (!dietType) missing.push("dietType");
         if (!spicePreference) missing.push("spicePreference");
         if (!cuisinePreferences.length) missing.push("cuisinePreferences");
-        // if (!Number.isFinite(mfNum) || mfNum <= 0) missing.push("mealFrequency");
+
+        if (!Number.isFinite(mfNum) || mfNum <= 0) missing.push("mealFrequency");
+
         const n = (s: string) => Number.isFinite(Number(s)) && Number(s) > 0;
         if (!n(calories)) missing.push("calories");
         if (!n(protein)) missing.push("protein");
@@ -956,16 +982,17 @@ export default function Register() {
         return missing;
     };
 
-    const canSubmit = requiredCheck().length === 0 && !submitting;
+    const missing = requiredCheck();
+    const canSubmit = missing.length === 0 && !submitting;
 
     // ========= API SUBMIT =========
     const onSubmit = async () => {
         console.log("[Register] onSubmit pressed");
         try {
-            const missing = requiredCheck();
-            if (missing.length) {
-                console.log("[Register] onSubmit blocked, missing:", missing);
-                Alert.alert("Missing required", `Please fill: ${missing.join(", ")}`);
+            const missingFields = requiredCheck();
+            if (missingFields.length) {
+                console.log("[Register] onSubmit blocked, missing:", missingFields);
+                Alert.alert("Missing required", `Please fill: ${missingFields.join(", ")}`);
                 return;
             }
 
@@ -974,13 +1001,7 @@ export default function Register() {
             const payload: any = {
                 name: name.trim(),
                 phoneNumber: phoneNumber.trim(),
-                addresses: [
-                    {
-                        flatNo: flatNo.trim(),
-                        block: block.trim(),
-                        apartment: apartment.trim(),
-                    },
-                ],
+                addresses: [buildAddressObj(flatNo, block, apartment)],
                 gender,
                 fitnessGoal,
                 dietType,
@@ -1194,9 +1215,7 @@ export default function Register() {
                                         {idx < steps.length - 1 && (
                                             <View
                                                 className={`w-6 h-1 mx-1 ${
-                                                    idx < step
-                                                        ? "bg-emerald-400/30"
-                                                        : "bg-neutral-800"
+                                                    idx < step ? "bg-emerald-400/30" : "bg-neutral-800"
                                                 }`}
                                             />
                                         )}
@@ -1212,6 +1231,15 @@ export default function Register() {
 
                     {/* Current Step */}
                     <View className="w-full">{steps[step]}</View>
+
+                    {/* TEMP: show missing fields on last step */}
+                    {step === steps.length - 1 && (
+                        <View className="mt-2 w-full">
+                            <Text className="text-xs text-red-400">
+                                {missing.length ? `Missing: ${missing.join(", ")}` : "All required fields are filled ✅"}
+                            </Text>
+                        </View>
+                    )}
                 </ScrollView>
 
                 {/* Navigation */}
@@ -1227,9 +1255,7 @@ export default function Register() {
                                 activeOpacity={0.8}
                                 disabled={submitting}
                             >
-                                <Text className="text-white font-bold text-center text-base">
-                                    ← Previous
-                                </Text>
+                                <Text className="text-white font-bold text-center text-base">← Previous</Text>
                             </TouchableOpacity>
                         ) : (
                             <View className="flex-1 mr-3" />
@@ -1252,9 +1278,7 @@ export default function Register() {
                                 }}
                                 disabled={submitting}
                             >
-                                <Text className="text-black font-bold text-center text-base">
-                                    Next →
-                                </Text>
+                                <Text className="text-black font-bold text-center text-base">Next →</Text>
                             </TouchableOpacity>
                         ) : (
                             <TouchableOpacity
