@@ -1,7 +1,15 @@
 // components/MealCard.tsx
-import React from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import React, { useState } from "react";
+import {
+    Alert,
+    Image,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
 import type { Meal } from "../types/meal";
+import { getAccessToken } from "../utils/secureStore";
+import { createSingleMealOrder } from "../lib/api";
 
 type Props = {
     meal: Meal;
@@ -9,57 +17,96 @@ type Props = {
 };
 
 const MealCard: React.FC<Props> = ({ meal, onPress }) => {
-    const { title, image, calories, macros, raw } = meal;
+    const { id, title, image, calories, macros } = meal;
+    const [ordering, setOrdering] = useState(false);
+
+    const imgUri =
+        typeof image === "string" && image.length > 0 ? image : undefined;
+
+    const handleOrderPress = async () => {
+        if (ordering) return;
+
+        try {
+            setOrdering(true);
+
+            const token = await getAccessToken();
+            if (!token) {
+                Alert.alert(
+                    "Login required",
+                    "Please login to order this meal."
+                );
+                return;
+            }
+
+            await createSingleMealOrder(token, id);
+
+            Alert.alert(
+                "Order placed",
+                "Your single meal order was created successfully."
+            );
+        } catch (err: any) {
+            Alert.alert(
+                "Order failed",
+                err?.message || "Could not place this order. Please try again."
+            );
+        } finally {
+            setOrdering(false);
+        }
+    };
 
     return (
         <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => onPress?.(meal)}
-            className="flex-row items-stretch rounded-2xl bg-zinc-900 mb-4 overflow-hidden"
+            className="flex-row items-center justify-between rounded-2xl bg-neutral-900 mb-4 px-4 py-3"
         >
-            {image ? (
-                <Image
-                    source={{ uri: image }}
-                    className="w-24 h-24"
-                    resizeMode="cover"
-                />
-            ) : (
-                <View className="w-24 h-24 bg-zinc-800 items-center justify-center">
-                    <Text className="text-xs text-zinc-400 text-center px-2">
-                        No Image
+            {/* LEFT: Text block */}
+            <View className="flex-1 pr-3">
+                {!!calories && (
+                    <Text className="text-xs text-neutral-400 mb-1">
+                        {calories} cal
                     </Text>
-                </View>
-            )}
+                )}
 
-            <View className="flex-1 p-3 justify-center">
                 <Text
-                    className="text-white text-base font-semibold"
-                    numberOfLines={1}
+                    className="text-white text-[15px] font-semibold leading-snug"
+                    numberOfLines={2}
                 >
                     {title}
                 </Text>
 
-                <Text className="text-zinc-400 text-xs mt-1">
-                    {calories} kcal • P {macros.protein}g • C {macros.carbs}g • F {macros.fat}g
+                <Text className="text-[12px] text-neutral-400 mt-2">
+                    Protein: {macros.protein}g | Carbs: {macros.carbs}g | Fat:{" "}
+                    {macros.fat}g
                 </Text>
 
-                <View className="flex-row mt-2 space-x-2">
-                    {raw?.dietType && (
-                        <View className="px-2 py-1 rounded-full bg-zinc-800">
-                            <Text className="text-[10px] text-zinc-200">
-                                {raw.dietType}
-                            </Text>
-                        </View>
-                    )}
-                    {raw?.spiceLevel && (
-                        <View className="px-2 py-1 rounded-full bg-zinc-800">
-                            <Text className="text-[10px] text-zinc-200">
-                                {raw.spiceLevel}
-                            </Text>
-                        </View>
-                    )}
-                </View>
+                {/* Order button */}
+                <TouchableOpacity
+                    onPress={handleOrderPress}
+                    activeOpacity={0.85}
+                    className="mt-3 self-start px-3 py-1.5 rounded-full bg-white"
+                    disabled={ordering}
+                >
+                    <Text className="text-black text-[12px] font-semibold">
+                        {ordering ? "Ordering…" : "Order this meal"}
+                    </Text>
+                </TouchableOpacity>
             </View>
+
+            {/* RIGHT: Image */}
+            {imgUri ? (
+                <Image
+                    source={{ uri: imgUri }}
+                    className="w-24 h-24 rounded-2xl"
+                    resizeMode="cover"
+                />
+            ) : (
+                <View className="w-24 h-24 rounded-2xl bg-neutral-800 items-center justify-center">
+                    <Text className="text-[11px] text-neutral-500 text-center px-2">
+                        No Image
+                    </Text>
+                </View>
+            )}
         </TouchableOpacity>
     );
 };

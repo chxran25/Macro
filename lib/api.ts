@@ -23,26 +23,36 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const url = `${BASE}${path}`;
     const start = Date.now();
 
+    // Log START
     log.info(`→ ${init.method || "GET"} ${url}`);
 
-    if (init.body) {
+    // If body is JSON, log it
+    if (init.body && !(init.body instanceof FormData)) {
         try {
             const parsed = JSON.parse(init.body as string);
             log.info(`📦 Payload:`, parsed);
         } catch {
             log.info(`📦 Raw body:`, init.body);
         }
+    } else if (init.body instanceof FormData) {
+        log.info(`📦 Payload: FormData`);
     }
 
+    // ❗ FIX: do NOT override content-type for FormData
+    const isForm = init.body instanceof FormData;
+
     const res = await fetch(url, {
-        headers: {
-            "Content-Type": "application/json",
-            ...(init.headers || {}),
-        },
         ...init,
+        headers: isForm
+            ? { ...(init.headers || {}) }
+            : {
+                "Content-Type": "application/json",
+                ...(init.headers || {}),
+            },
     });
 
     const time = Date.now() - start;
+
     let raw = "";
     let data: any = null;
 
@@ -50,19 +60,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
         raw = await res.text();
         data = raw ? JSON.parse(raw) : null;
     } catch {
-        log.warn(`⚠️ Response not JSON-parsable`);
+        log.warn("⚠️ Response is not JSON-parsable");
     }
 
     if (!res.ok) {
-        const looksLikeHtml =
-            typeof raw === "string" && raw.trim().startsWith("<!DOCTYPE html");
-        const msg =
-            data?.error ||
-            data?.message ||
-            (looksLikeHtml
-                ? `HTTP ${res.status} ${res.statusText || ""}`.trim()
-                : raw || `HTTP ${res.status}`);
-
+        const msg = data?.error || data?.message || raw || `HTTP ${res.status}`;
         const err = new Error(msg) as Error & { status?: number };
         err.status = res.status;
 
@@ -71,10 +73,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
 
     log.success(`← ${res.status} ${url} (${time} ms)`);
-    log.info(`✅ Response:`, data);
+    log.info("✅ Response:", data);
 
     return (data ?? {}) as T;
 }
+
 
 /* =======================
    AUTH / SIGNUP
@@ -192,4 +195,47 @@ export async function recommendWeeklyMeals(
 
         throw err;
     }
+}
+
+
+export type SingleMealOrderResponse = {
+    success: boolean;
+    message: string;
+    order: {
+        orderID: string;
+        orderType: string;
+        meal: any;
+        totalAmount: number;
+        status: string;
+        scheduledFor: string;
+        deliveryAddress: any;
+        adminId: string;
+        userLocation: any;
+        adminLocation: any;
+    };
+};
+
+/**
+ * Create a single-meal order for a given mealId.
+ * Optionally pass scheduledFor / addressIndex if you want later.
+ */
+export async function createSingleMealOrder(
+    token: string,
+    mealId: string,
+    opts: { scheduledFor?: Date | string; addressIndex?: number } = {}
+): Promise<SingleMealOrderResponse> {
+    const payload: any = { mealId };
+
+    if (opts.scheduledFor) payload.scheduledFor = opts.scheduledFor;
+    if (typeof opts.addressIndex === "number") {
+        payload.addressIndex = opts.addressIndex;
+    }
+
+    return request<SingleMealOrderResponse>("/order", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+    });
 }
