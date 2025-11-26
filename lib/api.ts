@@ -1,5 +1,8 @@
 // lib/api.ts
-import type { WeeklyMealPlanApiResponse } from "../types/meal";
+import type {
+    GetWeeklyPlanApiResponse,
+    WeeklyMealPlanApiResponse,
+} from "../types/meal";
 
 const BASE = "https://calorieboy.onrender.com/api/users";
 
@@ -116,35 +119,23 @@ export async function signupUser(payload: SignupPayload) {
 }
 
 /* =======================
-   WEEKLY PLAN (FETCH)
+   WEEKLY PLAN (FETCH EXISTING)
    ======================= */
 
 /**
- * Fetch user's weekly plan.
+ * Fetch user's stored weekly plan from /getWeekly.
  *
- * Backend (new shape):
- * - 401 → not logged in
- * - 404 + { message: "No weekly plan available for this user" } → NO PLAN YET
- * - 200 + {
- *       success: true,
- *       message: string,
- *       method: string,
- *       aiReasoning?: string,
- *       weekPlan: BackendWeekPlan
- *   }
- *
- * Frontend:
- * - returns WeeklyMealPlanApiResponse when a plan exists
- * - returns null when there is simply no plan yet
- * - throws on all other errors
+ * Backend:
+ *  - 404 + "No weekly plan..."  → NO PLAN YET (return null)
+ *  - 200 + { name, userId, weeklyPlan: { plan, totals, ... } } → plan exists
  */
 export async function getWeeklyPlan(
     token: string
-): Promise<WeeklyMealPlanApiResponse | null> {
+): Promise<GetWeeklyPlanApiResponse | null> {
     log.info(`🟧 Fetching weekly plan with token`);
 
     try {
-        const result = await request<WeeklyMealPlanApiResponse>("/getWeekly", {
+        const result = await request<GetWeeklyPlanApiResponse>("/getWeekly", {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
         });
@@ -170,6 +161,10 @@ export async function getWeeklyPlan(
    RECOMMEND (first-time)
    ======================= */
 
+/**
+ * /recommend-meals
+ * → { success, message, method, aiReasoning, weekPlan }
+ */
 export async function recommendWeeklyMeals(
     token: string
 ): Promise<WeeklyMealPlanApiResponse> {
@@ -186,7 +181,6 @@ export async function recommendWeeklyMeals(
         const status = err?.status;
         const msg = err?.message || "";
 
-        // This still handles the case where the route itself is missing / miswired
         if (status === 404 && msg.startsWith("HTTP 404")) {
             log.error(
                 "⚠️ /recommend-meals endpoint not found. Check backend routing (/api/users/recommend-meals)."

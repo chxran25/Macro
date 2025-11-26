@@ -10,7 +10,7 @@ import {
 } from "../types/meal";
 
 /**
- * Map a single BackendMeal → UI Meal
+ * Map a single BackendMeal -> UI Meal
  */
 export const mapBackendMealToMeal = (
     backendMeal: BackendMeal,
@@ -18,56 +18,63 @@ export const mapBackendMealToMeal = (
     section?: SectionName
 ): Meal => {
     return {
-        id: backendMeal._id,
-        title: backendMeal.name,
-        image: backendMeal.image?.url,
+        id: String(backendMeal._id ?? backendMeal.id ?? ""),
+
+        title: backendMeal.name ?? backendMeal.title ?? "Meal",
+
+        image: backendMeal.image?.url ?? "",
 
         macros: {
-            protein: backendMeal.protein ?? 0,
-            carbs: backendMeal.carbs ?? 0,
-            fat: backendMeal.fat ?? 0,
+            protein: backendMeal.protein ?? backendMeal.macros?.protein ?? 0,
+            carbs: backendMeal.carbs ?? backendMeal.macros?.carbs ?? 0,
+            fat: backendMeal.fat ?? backendMeal.macros?.fat ?? 0,
         },
 
         calories: backendMeal.calories ?? 0,
-        description: backendMeal.description,
+        description: backendMeal.description ?? "",
 
         day,
         section,
-
-        // keep full raw object in case UI needs more fields later
-        raw: backendMeal,
     };
 };
 
 /**
- * Map BackendWeekPlan (API `weekPlan`) → UI-normalized WeeklyPlan
- *
- * Result shape:
- *  weekly.plan[day][section] = Meal[]
+ * Map backend weeklyPlan (with .plan inside it) → UI WeeklyPlan
  */
 export const mapBackendWeekPlanToWeeklyPlan = (
-    backendWeekPlan: BackendWeekPlan
+    backendWeekly: { plan?: BackendWeekPlan }
 ): WeeklyPlan => {
-    const plan: WeeklyPlan["plan"] = {};
+    const result: WeeklyPlan = {
+        plan: {},
+    };
 
-    Object.entries(backendWeekPlan).forEach(([dayKey, sections]) => {
+    if (!backendWeekly || !backendWeekly.plan) return result;
+
+    const backendPlan = backendWeekly.plan;
+
+    Object.entries(backendPlan).forEach(([dayKey, sections]) => {
         const day = dayKey as DayKey;
-        plan[day] = plan[day] || {};
 
-        Object.entries(sections).forEach(([sectionKey, backendMeal]) => {
-            const section = sectionKey as SectionName;
+        if (!sections || typeof sections !== "object") return;
 
-            // For now, backend sends exactly one meal per section
-            const meal = mapBackendMealToMeal(backendMeal, day, section);
+        const sectionMap: Record<SectionName, Meal[]> = {};
 
-            // Store as array to keep UI API consistent and future-proof
-            if (!plan[day][section]) {
-                plan[day][section] = [meal];
-            } else {
-                plan[day][section].push(meal);
-            }
+        Object.entries(sections).forEach(([sectionName, value]) => {
+            const section = sectionName as SectionName;
+
+            const mealsArray = Array.isArray(value)
+                ? value
+                : value && typeof value === "object"
+                    ? [value]
+                    : [];
+
+            sectionMap[section] = mealsArray.map((m) =>
+                mapBackendMealToMeal(m, day, section)
+            );
         });
+
+        result.plan[day] = sectionMap;
     });
 
-    return { plan };
+    return result;
 };

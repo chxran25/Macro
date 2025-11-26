@@ -1,122 +1,116 @@
 // types/meal.ts
 
-/* ================================
- * Backend / API response types
- * ================================ */
-
-export type DayKey =
-    | "Monday"
-    | "Tuesday"
-    | "Wednesday"
-    | "Thursday"
-    | "Friday"
-    | "Saturday"
-    | "Sunday"
-    | string;
-
-export type SectionName = string;
-
-export type BackendMealImage = {
-    url: string;
-    publicId?: string;
-    originalName?: string;
-    uploadedAt?: string;
-    [k: string]: any;
-};
-
-export type BackendMeal = {
-    _id: string;
-    name: string;
-
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-
-    description?: string;
-    image?: BackendMealImage;
-
-    category?: string;
-    dietType?: string;
-    spiceLevel?: string;
-    cuisineType?: string;
-    prepTime?: number;
-    servingSize?: number;
-
-    [k: string]: any;
-};
-
-/**
- * Shape of the `weekPlan` object in the API response:
- *
- * {
- *   Monday:   { "Meal 1": BackendMeal, "Meal 2": BackendMeal, ... },
- *   Tuesday:  { ... },
- *   ...
- * }
- */
-export type BackendWeekPlan = Record<DayKey, Record<SectionName, BackendMeal>>;
-
-export type WeeklyMealPlanApiResponse = {
-    success: boolean;
-    message: string;
-    method: string;
-    aiReasoning?: string;
-    weekPlan: BackendWeekPlan;
-    [k: string]: any;
-};
-
-
-/* ================================
- * UI-normalized types
- * ================================ */
-
+/** ---------- Basic Macros ---------- */
 export type Macro = {
     protein: number;
     carbs: number;
     fat: number;
 };
 
+/** ---------- Single Meal (UI-normalized) ---------- */
 export type Meal = {
-    /** Backend `_id` */
     id: string;
-
-    /** Backend `name` mapped to UI title */
-    title: string;
-
-    /** Direct URL for rendering */
-    image?: string;
-
+    title: string; // normalized from backend "name" / "title"
+    image: string;
     macros: Macro;
     calories: number;
     description?: string;
-
-    /** Optional context for UI */
-    day?: DayKey;
-    section?: SectionName;
-
-    /** Full raw backend object if needed */
-    raw?: BackendMeal;
-
-    [k: string]: any;
+    [k: string]: any; // tolerate server extras
 };
 
-/**
- * Normalized weekly plan for UI:
- * plan[day][section] = Meal[]
- */
+/** ---------- Weekly Plan (UI-normalized) ---------- */
+export type DayKey = string;      // e.g., "Monday"
+export type SectionName = string; // e.g., "Meal 1", "Breakfast"
+
 export type WeeklyPlan = {
+    // plan[day][section] = Meal[]
     plan: Record<DayKey, Record<SectionName, Meal[]>>;
     [k: string]: any;
 };
 
-/**
- * Wrapper if you store a named plan per user.
- * (Optional – keep or extend as you need.)
- */
-export type WeeklyPlanResponse = {
-    userId?: string;
+/* ============================================================
+ * BACKEND SHAPES
+ * ============================================================ */
+
+/** Single meal document from backend */
+export type BackendMeal = {
+    _id?: string;
+    id?: string;
     name?: string;
-    weeklyPlan: WeeklyPlan;
+    title?: string;
+    image?: any;
+    img?: any;
+
+    calories?: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+    description?: string;
+
+    macros?: {
+        protein?: number;
+        carbs?: number;
+        fat?: number;
+        [k: string]: any;
+    };
+
+    [k: string]: any;
+};
+
+/**
+ * A section value from backend can be:
+ *  - a single BackendMeal
+ *  - an array of BackendMeal
+ *  - an object map of id -> BackendMeal
+ */
+export type BackendSectionValue =
+    | BackendMeal
+    | BackendMeal[]
+    | Record<string, BackendMeal>;
+
+/** Day plan from backend:  { "Meal 1": <sectionValue>, ... } */
+export type BackendDayPlan = Record<SectionName, BackendSectionValue>;
+
+/** Week plan from backend: { "Monday": <dayPlan>, ... } */
+export type BackendWeekPlan = Record<DayKey, BackendDayPlan>;
+
+/**
+ * Response shape from /recommend-meals
+ * (the one that has success + weekPlan at top level)
+ */
+export type WeeklyMealPlanApiResponse = {
+    success: boolean;
+    message: string;
+    method?: string;
+    aiReasoning?: string;
+    weekPlan: BackendWeekPlan;
+    [k: string]: any;
+};
+
+/**
+ * Response shape from /getWeekly
+ * (the one you logged in Metro)
+ *
+ * {
+ *   name: string;
+ *   userId: string;
+ *   weeklyPlan: {
+ *     generatedAt: string;
+ *     plan: BackendWeekPlan;
+ *     totals?: any;
+ *     weeklyTarget?: any;
+ *   }
+ * }
+ */
+export type GetWeeklyPlanApiResponse = {
+    name?: string;
+    userId?: string;
+    weeklyPlan?: {
+        generatedAt?: string;
+        plan?: BackendWeekPlan;
+        totals?: any;
+        weeklyTarget?: any;
+        [k: string]: any;
+    } | null;
     [k: string]: any;
 };
