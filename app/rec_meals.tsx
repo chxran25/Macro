@@ -20,10 +20,21 @@ import { getAccessToken } from "../utils/secureStore";
 
 // Normalize backend mealDoc -> UI Meal type
 function normalizeMeal(m: any): Meal {
+    // Helper to safely get a string URL
+    const getImageUrl = (img: any): string => {
+        if (!img) return "";
+        if (typeof img === "string") return img;
+        if (typeof img === "object") {
+            if (typeof img.uri === "string") return img.uri;
+            if (typeof img.url === "string") return img.url;
+        }
+        return "";
+    };
+
     return {
         id: (m?._id || m?.id || "").toString(),
         title: m?.title || m?.name || "Meal",
-        image: m?.image || m?.img || "",
+        image: getImageUrl(m?.image || m?.img),
         calories: Number(m?.calories ?? 0),
         macros: {
             protein: Number(m?.macros?.protein ?? m?.protein ?? 0),
@@ -45,7 +56,8 @@ const DAY_ORDER = [
     "Sunday",
 ];
 
-type WeekPlan = Record<string, Record<string, any>>; // { Monday: { "Meal 1": mealDoc, ... }, ... }
+// weekPlan: { Monday: { "Meal 1": mealDoc, ... }, ... }
+type WeekPlan = Record<string, Record<string, any>>;
 
 export default function RecMeals() {
     const router = useRouter();
@@ -70,6 +82,10 @@ export default function RecMeals() {
                 }
 
                 const res = await recommendWeeklyMeals(token);
+                console.log(
+                    "[REC_MEALS] weekPlan from backend:",
+                    JSON.stringify(res.weekPlan, null, 2)
+                );
                 if (!res || !res.success) {
                     throw new Error(res?.message || "Failed to generate weekly plan.");
                 }
@@ -153,7 +169,9 @@ export default function RecMeals() {
         <View className="flex-1 bg-black">
             <SafeAreaView edges={["top"]} className="bg-black">
                 <View className="flex-row items-center justify-between px-5 py-3 border-b border-neutral-900">
-                    <Text className="text-white text-lg font-semibold">Recommended Meals</Text>
+                    <Text className="text-white text-lg font-semibold">
+                        Recommended Meals
+                    </Text>
 
                     {/* Save & Continue — backend already stored weeklyPlan in user.weeklyPlan */}
                     <Pressable
@@ -162,7 +180,9 @@ export default function RecMeals() {
                         hitSlop={10}
                     >
                         <Check size={16} color="black" />
-                        <Text className="text-black font-semibold ml-1">Save & Continue</Text>
+                        <Text className="text-black font-semibold ml-1">
+                            Save & Continue
+                        </Text>
                     </Pressable>
                 </View>
             </SafeAreaView>
@@ -176,7 +196,9 @@ export default function RecMeals() {
                 </View>
             ) : errMsg ? (
                 <View className="flex-1 items-center justify-center px-8">
-                    <Text className="text-neutral-300 text-center mb-4">{errMsg}</Text>
+                    <Text className="text-neutral-300 text-center mb-4">
+                        {errMsg}
+                    </Text>
                     <Pressable
                         onPress={handleRetry}
                         className="px-4 py-2 rounded-full bg-white/10 border border-white/10 flex-row items-center"
@@ -231,41 +253,48 @@ export default function RecMeals() {
                                 No meals found for this day.
                             </Text>
                         ) : (
-                            mealsForSelectedDay.map(({ label, meal }, idx) => (
-                                <View key={meal.id || `${label}-${idx}`} className="mt-6">
-                                    <Text className="text-white text-sm font-semibold mb-2">
-                                        {label}
-                                    </Text>
-                                    <View className="flex-row bg-[#141414] rounded-2xl overflow-hidden mb-3">
-                                        <Image
-                                            source={{
-                                                uri:
-                                                    meal.image ||
-                                                    "https://picsum.photos/200/300",
-                                            }}
-                                            className="w-28 h-28"
-                                            resizeMode="cover"
-                                        />
-                                        <View className="flex-1 p-3 justify-center">
-                                            {!!meal.calories && (
-                                                <Text className="text-neutral-400 text-xs mb-1">
-                                                    {meal.calories} cal
+                            mealsForSelectedDay.map(({ label, meal }, idx) => {
+                                const imgUri =
+                                    typeof meal.image === "string" &&
+                                    meal.image.length > 0
+                                        ? meal.image
+                                        : "https://picsum.photos/200/300";
+
+                                return (
+                                    <View
+                                        key={`${meal.id || "meal"}-${label}-${idx}`} // 👈 guaranteed unique
+                                        className="mt-6"
+                                    >
+                                        <Text className="text-white text-sm font-semibold mb-2">
+                                            {label}
+                                        </Text>
+
+                                        <View className="flex-row bg-[#141414] rounded-2xl overflow-hidden mb-3">
+                                            <Image
+                                                source={{ uri: imgUri }}
+                                                className="w-28 h-28"
+                                                resizeMode="cover"
+                                            />
+
+                                            <View className="flex-1 p-3 justify-center">
+                                                {!!meal.calories && (
+                                                    <Text className="text-neutral-400 text-xs mb-1">
+                                                        {meal.calories} cal
+                                                    </Text>
+                                                )}
+                                                <Text className="text-white font-medium mb-1">
+                                                    {meal.title}
                                                 </Text>
-                                            )}
-                                            <Text className="text-white font-medium mb-1">
-                                                {meal.title}
-                                            </Text>
-                                            {meal.macros && (
                                                 <Text className="text-neutral-400 text-xs">
-                                                    Protein: {meal.macros.protein ?? 0}g | Carbs:{" "}
-                                                    {meal.macros.carbs ?? 0}g | Fat:{" "}
-                                                    {meal.macros.fat ?? 0}g
+                                                    Protein: {meal.macros.protein}g | Carbs:{" "}
+                                                    {meal.macros.carbs}g | Fat:{" "}
+                                                    {meal.macros.fat}g
                                                 </Text>
-                                            )}
+                                            </View>
                                         </View>
                                     </View>
-                                </View>
-                            ))
+                                );
+                            })
                         )}
                     </View>
                 </ScrollView>

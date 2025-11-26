@@ -1,48 +1,52 @@
 // app/(tabs)/meals.tsx
+
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, Image, Pressable, ActivityIndicator } from "react-native";
+import {
+    View,
+    Text,
+    ScrollView,
+    Pressable,
+    ActivityIndicator,
+    FlatList,
+    Modal,
+    Image,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SlidersHorizontal } from "lucide-react-native";
 import { useRouter } from "expo-router";
 
 import { getWeeklyPlan } from "../../lib/api";
-import type { WeeklyPlanResponse, Meal } from "../../types/meal";
+import type { WeeklyMealPlanApiResponse, DayKey, Meal } from "../../types/meal";
+
 import { getAccessToken } from "../../utils/secureStore";
+import { mapBackendWeekPlanToWeeklyPlan } from "../../utils/mealPlanMapper";
+import MealCard from "../../components/MealCard";
 
-// Normalize server meal -> UI Meal
-function normalizeMeal(m: any): Meal {
-    return {
-        id: (m?._id || m?.id || "").toString(),
-        title: m?.title || m?.name || "Meal",
-        image: m?.image || m?.img || "",
-        calories: Number(m?.calories ?? 0),
-        macros: {
-            protein: Number(m?.macros?.protein ?? m?.protein ?? 0),
-            carbs: Number(m?.macros?.carbs ?? m?.carbs ?? 0),
-            fat: Number(m?.macros?.fat ?? m?.fat ?? 0),
-        },
-        description: m?.description || "",
-    };
-}
-
-// Make sure we always have an array to render, then normalize
-function toMealArray(value: unknown): Meal[] {
-    const asArray = Array.isArray(value)
-        ? (value as any[])
-        : value && typeof value === "object"
-            ? Object.values(value as Record<string, any>)
-            : [];
-    return asArray.map(normalizeMeal);
-}
+const DAY_ORDER: DayKey[] = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+];
 
 export default function Meals() {
     const router = useRouter();
+
     const [loading, setLoading] = useState(true);
     const [errMsg, setErrMsg] = useState<string | null>(null);
-    const [data, setData] = useState<WeeklyPlanResponse | null>(null);
-    const [selectedDay, setSelectedDay] = useState<string | null>(null);
     const [needsRecommendations, setNeedsRecommendations] = useState(false);
 
+    const [weeklyPlan, setWeeklyPlan] = useState<any>(null);
+    const [selectedDay, setSelectedDay] = useState<DayKey>("Monday");
+
+    const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
+
+    /* -----------------------------------------------------
+     *  LOAD WEEKLY PLAN FROM API
+     * ----------------------------------------------------- */
     useEffect(() => {
         (async () => {
             try {
@@ -56,17 +60,26 @@ export default function Meals() {
                     return;
                 }
 
-                const res = await getWeeklyPlan(token); // may be null now
+                const res: WeeklyMealPlanApiResponse | null = await getWeeklyPlan(token);
+
+
+
                 if (!res) {
-                    // no weekly plan yet
                     setNeedsRecommendations(true);
-                    setData(null);
+                    setWeeklyPlan(null);
                     return;
                 }
+                console.log(
+                    "[MEALS TAB] weekly plan from backend:",
+                    JSON.stringify(res.weekPlan, null, 2)
+                );
 
-                setData(res);
-                const dayKeys = Object.keys(res.weeklyPlan?.plan || {});
-                if (dayKeys.length > 0) setSelectedDay(dayKeys[0]);
+                const mapped = mapBackendWeekPlanToWeeklyPlan(res.weekPlan);
+                setWeeklyPlan(mapped);
+
+                // Auto-select first available day
+                const dayKeys = Object.keys(mapped.plan);
+                if (dayKeys.length > 0) setSelectedDay(dayKeys[0] as DayKey);
             } catch (e: any) {
                 setErrMsg(e?.message || "Failed to fetch weekly plan.");
             } finally {
@@ -75,20 +88,29 @@ export default function Meals() {
         })();
     }, []);
 
+    /* -----------------------------------------------------
+     *  GET MEALS FOR SELECTED DAY (flatten sections)
+     * ----------------------------------------------------- */
+    const mealsForSelectedDay = useMemo<Meal[]>(() => {
+        if (!weeklyPlan) return [];
 
-    const days = useMemo<string[]>(
-        () => Object.keys(data?.weeklyPlan?.plan || {}),
-        [data]
-    );
+        const sections = weeklyPlan.plan[selectedDay];
+        if (!sections) return [];
 
-    const sections = useMemo<Record<string, unknown>>(() => {
-        if (!data || !selectedDay) return {};
-        const day = (data.weeklyPlan?.plan as any)?.[selectedDay];
-        return (day as Record<string, unknown>) || {};
-    }, [data, selectedDay]);
+        // sections: Record<SectionName, Meal[]>
+        // Object.values(sections) → Meal[][]
+        const values = Object.values(sections) as Meal[][];
 
+        // flatten Meal[][] → Meal[]
+        return values.flat();
+    }, [weeklyPlan, selectedDay]);
+
+    /* -----------------------------------------------------
+     *  RENDER
+     * ----------------------------------------------------- */
     return (
         <View className="flex-1 bg-black">
+            {/* TOP BAR */}
             <SafeAreaView edges={["top"]} className="bg-black">
                 <View className="flex-row items-center justify-between px-5 py-3 border-b border-neutral-900">
                     <Text className="text-white text-lg font-semibold">Meal Plan</Text>
@@ -98,57 +120,75 @@ export default function Meals() {
                 </View>
             </SafeAreaView>
 
+            {/* LOADING */}
             {loading ? (
                 <View className="flex-1 items-center justify-center">
                     <ActivityIndicator />
                     <Text className="text-neutral-400 mt-3">Loading weekly plan…</Text>
                 </View>
             ) : needsRecommendations ? (
+                /* NO PLAN → SHOW CTA */
                 <View className="flex-1 items-center justify-center px-8">
                     <Text className="text-neutral-300 text-center mb-4">
                         You don’t have a weekly plan yet. Generate recommendations to get started.
                     </Text>
+
                     <Pressable
                         onPress={() => router.replace("/rec_meals")}
                         className="px-5 py-3 rounded-2xl bg-white"
                     >
-                        <Text className="text-black font-semibold">Generate Recommendations</Text>
+                        <Text className="text-black font-semibold">
+                            Generate Recommendations
+                        </Text>
                     </Pressable>
                 </View>
             ) : errMsg ? (
+                /* ERROR */
                 <View className="flex-1 items-center justify-center px-8">
                     <Text className="text-neutral-300 text-center">{errMsg}</Text>
                 </View>
-            ) : !data || days.length === 0 ? (
+            ) : !weeklyPlan ? (
                 <View className="flex-1 items-center justify-center px-8">
                     <Text className="text-neutral-300 text-center">
                         No weekly plan available for this user.
                     </Text>
+
                     <Pressable
                         onPress={() => router.replace("/rec_meals")}
                         className="mt-4 px-5 py-3 rounded-2xl bg-white"
                     >
-                        <Text className="text-black font-semibold">Create from Recommendations</Text>
+                        <Text className="text-black font-semibold">
+                            Create from Recommendations
+                        </Text>
                     </Pressable>
                 </View>
             ) : (
-                <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-                    {/* Day selector */}
+                /* WEEKLY PLAN LOADED */
+                <View className="flex-1">
+                    {/* DAY SELECTOR */}
                     <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         className="border-b border-neutral-900"
                         contentContainerStyle={{ paddingHorizontal: 16 }}
                     >
-                        {days.map((day) => {
+                        {DAY_ORDER.filter((d) => weeklyPlan.plan[d]).map((day) => {
                             const active = day === selectedDay;
                             return (
                                 <Pressable
                                     key={day}
                                     onPress={() => setSelectedDay(day)}
-                                    className={`px-4 py-3 rounded-full mr-3 ${active ? "bg-white" : ""}`}
+                                    className={`px-4 py-3 rounded-full mr-3 ${
+                                        active ? "bg-white" : "bg-neutral-900"
+                                    }`}
                                 >
-                                    <Text className={active ? "text-black font-semibold" : "text-white"}>
+                                    <Text
+                                        className={
+                                            active
+                                                ? "text-black font-semibold"
+                                                : "text-white"
+                                        }
+                                    >
                                         {day}
                                     </Text>
                                 </Pressable>
@@ -156,49 +196,82 @@ export default function Meals() {
                         })}
                     </ScrollView>
 
-                    {/* Sections for selected day */}
-                    <View className="px-5">
-                        {Object.entries(sections).map(([sectionName, mealsUnknown]) => {
-                            const meals = toMealArray(mealsUnknown);
+                    {/* LIST OF MEALS */}
+                    <FlatList
+                        data={mealsForSelectedDay}
+                        keyExtractor={(item, index) => `${item.id}-${index}`}  // 👈 change this
+                        contentContainerStyle={{ padding: 16 }}
+                        renderItem={({ item }) => (
+                            <MealCard meal={item} onPress={setSelectedMeal} />
+                        )}
+                    />
 
-                            return (
-                                <View key={sectionName} className="mt-6">
-                                    <Text className="text-white text-lg font-semibold mb-3">{sectionName}</Text>
 
-                                    {meals.length === 0 ? (
-                                        <Text className="text-neutral-500 text-sm">No items.</Text>
-                                    ) : (
-                                        meals.map((meal, idx) => (
-                                            <View
-                                                key={meal.id || `${sectionName}-${idx}`}
-                                                className="flex-row bg-[#141414] rounded-2xl overflow-hidden mb-3"
-                                            >
-                                                <Image
-                                                    source={{ uri: meal.image || "https://picsum.photos/200/300" }}
-                                                    className="w-28 h-28"
-                                                    resizeMode="cover"
-                                                />
-                                                <View className="flex-1 p-3 justify-center">
-                                                    {!!meal.calories && (
-                                                        <Text className="text-neutral-400 text-xs mb-1">
-                                                            {meal.calories} cal
-                                                        </Text>
-                                                    )}
-                                                    <Text className="text-white font-medium mb-1">{meal.title}</Text>
-                                                    {meal.macros && (
-                                                        <Text className="text-neutral-400 text-xs">
-                                                            Protein: {meal.macros.protein ?? 0}g | Carbs: {meal.macros.carbs ?? 0}g | Fat: {meal.macros.fat ?? 0}g
-                                                        </Text>
-                                                    )}
-                                                </View>
-                                            </View>
-                                        ))
-                                    )}
-                                </View>
-                            );
-                        })}
-                    </View>
-                </ScrollView>
+                    {/* MEAL DETAIL MODAL */}
+                    <Modal
+                        visible={!!selectedMeal}
+                        transparent
+                        animationType="slide"
+                        onRequestClose={() => setSelectedMeal(null)}
+                    >
+                        <Pressable
+                            className="flex-1 bg-black/60 justify-end"
+                            onPress={() => setSelectedMeal(null)}
+                        >
+                            <Pressable
+                                onPress={(e) => e.stopPropagation()}
+                                className="bg-neutral-900 rounded-t-3xl px-5 pt-5 pb-8 max-h-[75%]"
+                            >
+                                {selectedMeal && (
+                                    <>
+                                        {/* IMAGE */}
+                                        {selectedMeal.image && (
+                                            <Image
+                                                source={{ uri: selectedMeal.image }}
+                                                className="w-full h-48 rounded-xl mb-4"
+                                                resizeMode="cover"
+                                            />
+                                        )}
+
+                                        <Text className="text-white text-xl font-semibold mb-2">
+                                            {selectedMeal.title}
+                                        </Text>
+
+                                        {selectedMeal.description && (
+                                            <Text className="text-neutral-300 text-sm mb-3">
+                                                {selectedMeal.description}
+                                            </Text>
+                                        )}
+
+                                        <Text className="text-neutral-400 text-sm">
+                                            {selectedMeal.calories} kcal
+                                        </Text>
+
+                                        <Text className="text-neutral-500 text-xs mb-4">
+                                            Protein {selectedMeal.macros.protein}g • Carbs{" "}
+                                            {selectedMeal.macros.carbs}g • Fat{" "}
+                                            {selectedMeal.macros.fat}g
+                                        </Text>
+
+                                        {selectedMeal.raw && (
+                                            <Text className="text-neutral-500 text-xs">
+                                                {selectedMeal.raw.cuisineType
+                                                    ? `Cuisine: ${selectedMeal.raw.cuisineType}  `
+                                                    : ""}
+                                                {selectedMeal.raw.category
+                                                    ? `• Category: ${selectedMeal.raw.category}  `
+                                                    : ""}
+                                                {selectedMeal.raw.dietType
+                                                    ? `• Diet: ${selectedMeal.raw.dietType}`
+                                                    : ""}
+                                            </Text>
+                                        )}
+                                    </>
+                                )}
+                            </Pressable>
+                        </Pressable>
+                    </Modal>
+                </View>
             )}
         </View>
     );

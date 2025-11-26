@@ -1,14 +1,18 @@
 // lib/api.ts
-import type { WeeklyPlanResponse } from "../types/meal";
+import type { WeeklyMealPlanApiResponse } from "../types/meal";
 
 const BASE = "https://calorieboy.onrender.com/api/users";
 
 /** Utility to colorize logs (works in Metro console) */
 const log = {
-    info: (msg: string, ...rest: any[]) => console.log(`\x1b[36m[API INFO]\x1b[0m ${msg}`, ...rest),
-    success: (msg: string, ...rest: any[]) => console.log(`\x1b[32m[API OK]\x1b[0m ${msg}`, ...rest),
-    warn: (msg: string, ...rest: any[]) => console.warn(`\x1b[33m[API WARN]\x1b[0m ${msg}`, ...rest),
-    error: (msg: string, ...rest: any[]) => console.error(`\x1b[31m[API ERR]\x1b[0m ${msg}`, ...rest),
+    info: (msg: string, ...rest: any[]) =>
+        console.log(`\x1b[36m[API INFO]\x1b[0m ${msg}`, ...rest),
+    success: (msg: string, ...rest: any[]) =>
+        console.log(`\x1b[32m[API OK]\x1b[0m ${msg}`, ...rest),
+    warn: (msg: string, ...rest: any[]) =>
+        console.warn(`\x1b[33m[API WARN]\x1b[0m ${msg}`, ...rest),
+    error: (msg: string, ...rest: any[]) =>
+        console.error(`\x1b[31m[API ERR]\x1b[0m ${msg}`, ...rest),
 };
 
 /** Generic fetch helper with logging + sane error bubbling */
@@ -28,7 +32,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
 
     const res = await fetch(url, {
-        headers: { "Content-Type": "application/json", ...(init.headers || {}) },
+        headers: {
+            "Content-Type": "application/json",
+            ...(init.headers || {}),
+        },
         ...init,
     });
 
@@ -44,11 +51,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
 
     if (!res.ok) {
-        const looksLikeHtml = typeof raw === "string" && raw.trim().startsWith("<!DOCTYPE html");
+        const looksLikeHtml =
+            typeof raw === "string" && raw.trim().startsWith("<!DOCTYPE html");
         const msg =
             data?.error ||
             data?.message ||
-            (looksLikeHtml ? `HTTP ${res.status} ${res.statusText || ""}`.trim() : raw || `HTTP ${res.status}`);
+            (looksLikeHtml
+                ? `HTTP ${res.status} ${res.statusText || ""}`.trim()
+                : raw || `HTTP ${res.status}`);
 
         const err = new Error(msg) as Error & { status?: number };
         err.status = res.status;
@@ -106,30 +116,35 @@ export async function signupUser(payload: SignupPayload) {
 }
 
 /* =======================
-   WEEKLY PLAN
+   WEEKLY PLAN (FETCH)
    ======================= */
 
 /**
  * Fetch user's weekly plan.
  *
- * Backend:
+ * Backend (new shape):
  * - 401 → not logged in
- * - 404 + { error: "User not found" }           → real error
- * - 404 + { message: "No weekly plan ..." }     → NO PLAN YET (expected for new users)
- * - 200 + { userId, name, weeklyPlan }          → plan exists
+ * - 404 + { message: "No weekly plan available for this user" } → NO PLAN YET
+ * - 200 + {
+ *       success: true,
+ *       message: string,
+ *       method: string,
+ *       aiReasoning?: string,
+ *       weekPlan: BackendWeekPlan
+ *   }
  *
  * Frontend:
- * - returns WeeklyPlanResponse when plan exists
+ * - returns WeeklyMealPlanApiResponse when a plan exists
  * - returns null when there is simply no plan yet
  * - throws on all other errors
  */
 export async function getWeeklyPlan(
     token: string
-): Promise<WeeklyPlanResponse | null> {
+): Promise<WeeklyMealPlanApiResponse | null> {
     log.info(`🟧 Fetching weekly plan with token`);
 
     try {
-        const result = await request<WeeklyPlanResponse>("/getWeekly", {
+        const result = await request<WeeklyMealPlanApiResponse>("/getWeekly", {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
         });
@@ -155,24 +170,23 @@ export async function getWeeklyPlan(
    RECOMMEND (first-time)
    ======================= */
 
-export async function recommendWeeklyMeals(token: string) {
-    log.info(`🟨 Generating meal recommendations`);
+export async function recommendWeeklyMeals(
+    token: string
+): Promise<WeeklyMealPlanApiResponse> {
+    log.info(`🟨 Generating meal recommendations (GET /recommend-meals)`);
 
     try {
-        return await request<{
-            success: boolean;
-            message: string;
-            method?: string;
-            weekPlan?: any;
-        }>("/recommend-meals", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
+        return await request<WeeklyMealPlanApiResponse>("/recommend-meals", {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
         });
     } catch (err: any) {
         const status = err?.status;
         const msg = err?.message || "";
 
-        // If the endpoint itself is missing / miswired, we get a 404 HTML page.
+        // This still handles the case where the route itself is missing / miswired
         if (status === 404 && msg.startsWith("HTTP 404")) {
             log.error(
                 "⚠️ /recommend-meals endpoint not found. Check backend routing (/api/users/recommend-meals)."
