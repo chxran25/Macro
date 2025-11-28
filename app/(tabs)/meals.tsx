@@ -1,5 +1,4 @@
-// app/(tabs)/meals.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
     View,
     Text,
@@ -8,7 +7,7 @@ import {
     Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { SlidersHorizontal } from "lucide-react-native";
+import { SlidersHorizontal , ShoppingCart} from "lucide-react-native";
 import { useRouter } from "expo-router";
 
 import { getWeeklyPlan } from "../../lib/api";
@@ -21,6 +20,7 @@ import type {
 import { getAccessToken } from "../../utils/secureStore";
 import { mapBackendWeekPlanToWeeklyPlan } from "../../utils/mealPlanMapper";
 import MealCard from "../../components/MealCard";
+
 
 type WeeklyTotals = {
     calories?: number;
@@ -40,6 +40,11 @@ export default function Meals() {
     const [selectedDay, setSelectedDay] = useState<DayKey | null>(null);
     const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
     const [weeklyTotals, setWeeklyTotals] = useState<WeeklyTotals | null>(null);
+
+    // 🔔 Cart bubble state
+    const [cartBubbleVisible, setCartBubbleVisible] = useState(false);
+    const [cartBubbleText, setCartBubbleText] = useState("Item added to cart");
+    const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         (async () => {
@@ -92,6 +97,13 @@ export default function Meals() {
                 setLoading(false);
             }
         })();
+
+        // Cleanup timer on unmount
+        return () => {
+            if (hideTimerRef.current) {
+                clearTimeout(hideTimerRef.current);
+            }
+        };
     }, []);
 
     /* ---------- Day list ---------- */
@@ -111,6 +123,31 @@ export default function Meals() {
         return values.flat();
     }, [weeklyPlan, selectedDay]);
 
+    /* ---------- Handle meal added to cart ---------- */
+    const handleMealAddedToCart = (meal?: Meal) => {
+        // Set text like "Paneer Bowl added to cart"
+        const msg = meal?.title
+            ? `${meal.title} added to cart`
+            : "Item added to cart";
+        setCartBubbleText(msg);
+        setCartBubbleVisible(true);
+
+        // Reset previous timer
+        if (hideTimerRef.current) {
+            clearTimeout(hideTimerRef.current);
+        }
+
+        // Auto hide after 3 seconds
+        hideTimerRef.current = setTimeout(() => {
+            setCartBubbleVisible(false);
+        }, 3000);
+    };
+
+    const handleCartBubblePress = () => {
+        setCartBubbleVisible(false);
+        router.push("/checkout"); // 🔁 adjust if your route path differs
+    };
+
     return (
         <View className="flex-1 bg-black">
             {/* ---------- Top bar ---------- */}
@@ -125,13 +162,27 @@ export default function Meals() {
                                 Your AI-crafted meals for the week
                             </Text>
                         </View>
-                        <Pressable
-                            hitSlop={8}
-                            className="w-9 h-9 rounded-full border border-white/10 items-center justify-center bg-white/5"
-                        >
-                            <SlidersHorizontal color="white" size={18} />
-                        </Pressable>
+
+                        <View className="flex-row items-center">
+                            {/* Optional filter icon */}
+                            <Pressable
+                                hitSlop={8}
+                                className="w-9 h-9 rounded-full border border-white/10 items-center justify-center bg-white/5 mr-2"
+                            >
+                                <SlidersHorizontal color="white" size={18} />
+                            </Pressable>
+
+                            {/* Cart icon → /checkout */}
+                            <Pressable
+                                hitSlop={8}
+                                onPress={() => router.push("/checkout")}
+                                className="w-9 h-9 rounded-full border border-white/10 items-center justify-center bg-white/5"
+                            >
+                                <ShoppingCart color="white" size={18} />
+                            </Pressable>
+                        </View>
                     </View>
+
 
                     {/* Weekly macro strip */}
                     {weeklyTotals && (
@@ -275,11 +326,40 @@ export default function Meals() {
                                     key={`${meal.id}-${selectedDay}-${index}`}
                                     meal={meal}
                                     onPress={setSelectedMeal}
+                                    onAddedToCart={handleMealAddedToCart}
                                 />
                             ))
                         )}
                     </View>
                 </ScrollView>
+            )}
+
+            {/* 🔔 Floating cart bubble (Swiggy-style) */}
+            {cartBubbleVisible && (
+                <View className="absolute left-0 right-0 bottom-4 px-4">
+                    <Pressable
+                        onPress={handleCartBubblePress}
+                        className="flex-row items-center justify-between px-4 py-3 rounded-2xl bg-white"
+                        style={{
+                            shadowColor: "#000",
+                            shadowOpacity: 0.25,
+                            shadowRadius: 6,
+                            elevation: 6,
+                        }}
+                    >
+                        <View className="flex-1 mr-3">
+                            <Text className="text-black font-semibold text-sm">
+                                {cartBubbleText}
+                            </Text>
+                            <Text className="text-neutral-700 text-xs mt-0.5">
+                                Tap to view cart & checkout
+                            </Text>
+                        </View>
+                        <Text className="text-black font-semibold text-xs">
+                            View Cart →
+                        </Text>
+                    </Pressable>
+                </View>
             )}
         </View>
     );

@@ -1,4 +1,3 @@
-// components/MealCard.tsx
 import React, { useState } from "react";
 import {
     Alert,
@@ -14,9 +13,11 @@ import { createSingleMealOrder } from "../lib/api";
 type Props = {
     meal: Meal;
     onPress?: (meal: Meal) => void;
+    /** Called when this meal is successfully added to cart */
+    onAddedToCart?: (meal: Meal) => void;
 };
 
-const MealCard: React.FC<Props> = ({ meal, onPress }) => {
+const MealCard: React.FC<Props> = ({ meal, onPress, onAddedToCart }) => {
     const { id, title, image, calories, macros } = meal;
     const [ordering, setOrdering] = useState(false);
 
@@ -33,21 +34,19 @@ const MealCard: React.FC<Props> = ({ meal, onPress }) => {
             if (!token) {
                 Alert.alert(
                     "Login required",
-                    "Please login to order this meal."
+                    "Please login to add this meal to your cart."
                 );
                 return;
             }
 
             await createSingleMealOrder(token, id);
 
-            Alert.alert(
-                "Order placed",
-                "Your single meal order was created successfully."
-            );
+            // 🔔 notify parent so it can show the floating bubble
+            onAddedToCart?.(meal);
         } catch (err: any) {
             Alert.alert(
-                "Order failed",
-                err?.message || "Could not place this order. Please try again."
+                "Action failed",
+                err?.message || "Could not add this meal. Please try again."
             );
         } finally {
             setOrdering(false);
@@ -80,7 +79,7 @@ const MealCard: React.FC<Props> = ({ meal, onPress }) => {
                     {macros.fat}g
                 </Text>
 
-                {/* Order button */}
+                {/* Add to cart button */}
                 <TouchableOpacity
                     onPress={handleOrderPress}
                     activeOpacity={0.85}
@@ -88,7 +87,7 @@ const MealCard: React.FC<Props> = ({ meal, onPress }) => {
                     disabled={ordering}
                 >
                     <Text className="text-black text-[12px] font-semibold">
-                        {ordering ? "Ordering…" : "Order this meal"}
+                        {ordering ? "Adding…" : "Add to cart"}
                     </Text>
                 </TouchableOpacity>
             </View>

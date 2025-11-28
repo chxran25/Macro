@@ -198,22 +198,29 @@ export async function recommendWeeklyMeals(
 }
 
 
+export type CartMeal = {
+    orderType: string;           // "SingleMeal"
+    mealId: string;
+    mealName: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fats: number;
+    imageUrl: string | null;
+    scheduledFor: string | Date; // backend sends ISO string, but we can accept Date too
+    mealType: string;
+    quantity: number;
+    // refine this later if you have a proper Address type
+    deliveryAddress?: any;
+};
+
 export type SingleMealOrderResponse = {
     success: boolean;
     message: string;
-    order: {
-        orderID: string;
-        orderType: string;
-        meal: any;
-        totalAmount: number;
-        status: string;
-        scheduledFor: string;
-        deliveryAddress: any;
-        adminId: string;
-        userLocation: any;
-        adminLocation: any;
-    };
+    cartItem: CartMeal;
+    cart: CartMeal[];
 };
+
 
 /**
  * Create a single-meal order for a given mealId.
@@ -237,5 +244,97 @@ export async function createSingleMealOrder(
             Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
+    });
+}
+
+
+/* =======================
+   CART
+   ======================= */
+
+export type CartItem = {
+    orderType: string;
+
+    // Single Meal
+    mealId: string | null;
+    mealName: string | null;
+    calories: number | null;
+    protein: number | null;
+    carbs: number | null;
+    fats: number | null;
+    imageUrl: string | null;
+    scheduledFor?: string;
+    mealType?: string;
+    quantity?: number;
+
+    // Daily Plan
+    dayName?: string;
+    meals?: any;
+    startDate?: string;
+    deliveryTime?: string;
+    mealFrequency?: number;
+    price?: number | null;
+    userAddress?: any;
+
+    // Weekly Plan
+    weeklyPlan?: any;
+    endDate?: string;
+
+    // For UI
+    totalAmount?: number | null;
+};
+
+export type GetCartApiResponse = {
+    success: boolean;
+    cartCount: number;
+    cart: CartItem[];
+};
+
+export async function getCart(
+    token: string
+): Promise<GetCartApiResponse> {
+    log.info("🛒 Fetching cart");
+    return request<GetCartApiResponse>("/cart", {
+        method: "GET",
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
+}
+
+/* =======================
+   CHECKOUT CART ORDER
+   ======================= */
+
+export type CheckoutCartOrderResponse = {
+    success: boolean;
+    message: string;
+    cartOrder: {
+        _id: string;
+        userId: string;
+        cartItems: any[];
+        subtotal: number;
+        platformFee: number;
+        handlingFee: number;
+        distanceFee: number;
+        totalAmount: number;
+        status: string;         // "Pending"
+        paymentStatus: string;  // "Completed" (per backend)
+        userLocation: any;
+        adminLocation: any;
+        createdAt?: string;
+        updatedAt?: string;
+    };
+};
+
+export async function checkoutCart(
+    token: string
+): Promise<CheckoutCartOrderResponse> {
+    log.info("🧾 Checking out cart");
+    return request<CheckoutCartOrderResponse>("/checkout", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
     });
 }
