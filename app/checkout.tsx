@@ -26,11 +26,9 @@ const CheckoutScreen: React.FC = () => {
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
     const [cartCount, setCartCount] = useState(0);
     const [selectedPayment, setSelectedPayment] = useState<"card" | null>("card");
-
-    // (Optional future use) Delivery address input
     const [addressInput, setAddressInput] = useState("");
 
-    // ------- Fetch cart on mount -------
+    // -------- Fetch cart on mount --------
     useEffect(() => {
         (async () => {
             try {
@@ -44,7 +42,7 @@ const CheckoutScreen: React.FC = () => {
 
                 const res: GetCartApiResponse = await getCart(token);
 
-// ✅ Only keep items that were added via the SingleMeal endpoint
+                // ✅ Only show items that were added via the SingleMeal flow
                 const singles = (res.cart || []).filter(
                     (item) => item.orderType === "SingleMeal"
                 );
@@ -62,12 +60,11 @@ const CheckoutScreen: React.FC = () => {
         })();
     }, []);
 
-    // ------- Derived amounts (front-end view only) -------
+    // -------- Amount calculations (front-end view) --------
     const { subtotal, deliveryFee, total } = useMemo(() => {
         let sub = 0;
 
         cartItems.forEach((item) => {
-            // Prefer explicit price; fallback to totalAmount
             const base =
                 (item.price ?? undefined) !== undefined
                     ? item.price || 0
@@ -75,9 +72,8 @@ const CheckoutScreen: React.FC = () => {
             sub += base || 0;
         });
 
-        // You don't have delivery fees from /cart; use a simple estimate for display.
-        // Backend will compute real totals in /checkout.
-        const delivery = cartItems.length > 0 ? 5 : 0; // tweak as needed
+        // Visual delivery fee; backend computes actual fees at /checkout
+        const delivery = cartItems.length > 0 ? 5 : 0;
         const t = sub + delivery;
 
         return {
@@ -87,10 +83,9 @@ const CheckoutScreen: React.FC = () => {
         };
     }, [cartItems]);
 
-    const formatCurrency = (value: number) =>
-        `₹${value.toFixed(2)}`; // or `$` if you prefer
+    const formatCurrency = (value: number) => `₹${value.toFixed(2)}`;
 
-    // ------- Place Order / Checkout -------
+    // -------- Place Order / Checkout --------
     const handlePlaceOrder = async () => {
         if (placingOrder) return;
         if (!cartItems.length) {
@@ -113,6 +108,10 @@ const CheckoutScreen: React.FC = () => {
 
             const res = await checkoutCart(token);
 
+            // 🔥 Backend clears user.cart; mirror that in UI
+            setCartItems([]);
+            setCartCount(0);
+
             Alert.alert(
                 "Order Placed",
                 res?.message || "Your order has been placed successfully.",
@@ -120,8 +119,8 @@ const CheckoutScreen: React.FC = () => {
                     {
                         text: "OK",
                         onPress: () => {
-                            // You can navigate to Orders screen if you have one
-                            router.replace("/(tabs)/orders" as any);
+                            // Adjust this route to where you want user to land after order
+                            router.replace("/(tabs)/meals" as any);
                         },
                     },
                 ]
@@ -140,19 +139,19 @@ const CheckoutScreen: React.FC = () => {
         router.back();
     };
 
-    // ------- Render helpers -------
+    // -------- Render helpers --------
     const renderCartItem = (item: CartItem, index: number) => {
-        const quantity = item.quantity || 1;
-        const subtitle =
-            item.orderType === "SingleMeal"
-                ? "Single Meal Plan"
-                : `${quantity} item${quantity > 1 ? "s" : ""}`;
-
+        const subtitle = "Single Meal Plan";
         const imageUri = item.imageUrl || undefined;
+
+        const unitPrice =
+            (item.price ?? undefined) !== undefined
+                ? item.price || 0
+                : item.totalAmount || 0;
 
         return (
             <View
-                key={`${item.mealId || index}-${index}`}
+                key={`${item.mealId || "item"}-${index}`}
                 className="flex-row items-center mb-4"
             >
                 {/* Image */}
@@ -185,21 +184,19 @@ const CheckoutScreen: React.FC = () => {
 
                 {/* Price */}
                 <Text className="text-white text-sm font-semibold ml-2">
-                    {formatCurrency(
-                        (item.price ??
-                            item.totalAmount ??
-                            0) as number
-                    )}
+                    {formatCurrency(unitPrice || 0)}
                 </Text>
             </View>
         );
     };
 
-    // ------- UI -------
+    const hasItems = cartItems.length > 0;
+
+    // -------- UI --------
     return (
         <View
             className="flex-1 bg-black"
-            style={{ backgroundColor: "#1c130b" }} // deep brown to match mock
+            style={{ backgroundColor: "#1c130b" }} // deep brown like mock
         >
             <SafeAreaView edges={["top"]} className="bg-transparent">
                 {/* Top bar */}
@@ -222,7 +219,7 @@ const CheckoutScreen: React.FC = () => {
                         Loading your cart…
                     </Text>
                 </View>
-            ) : !cartItems.length ? (
+            ) : !hasItems ? (
                 <View className="flex-1 items-center justify-center px-6">
                     <Text className="text-neutral-300 text-center mb-4">
                         Your cart is empty.
@@ -238,9 +235,7 @@ const CheckoutScreen: React.FC = () => {
                 </View>
             ) : (
                 <ScrollView
-                    contentContainerStyle={{
-                        paddingBottom: 24,
-                    }}
+                    contentContainerStyle={{ paddingBottom: 24 }}
                     className="flex-1"
                 >
                     {/* Order Summary */}
@@ -297,7 +292,7 @@ const CheckoutScreen: React.FC = () => {
                         <Text className="text-white text-base font-semibold mb-2">
                             Delivery Address
                         </Text>
-                        {/* For now, input is visual only. Backend uses saved address. */}
+                        {/* Visual only; backend uses saved default address */}
                         <TextInput
                             value={addressInput}
                             onChangeText={setAddressInput}
@@ -336,11 +331,8 @@ const CheckoutScreen: React.FC = () => {
             )}
 
             {/* Place Order button */}
-            {!loading && cartItems.length > 0 && (
-                <SafeAreaView
-                    edges={["bottom"]}
-                    className="bg-transparent"
-                >
+            {!loading && hasItems && (
+                <SafeAreaView edges={["bottom"]} className="bg-transparent">
                     <View className="px-4 pb-3 pt-1">
                         <TouchableOpacity
                             activeOpacity={0.9}
