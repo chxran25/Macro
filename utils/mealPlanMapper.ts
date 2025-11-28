@@ -1,5 +1,4 @@
 // utils/mealPlanMapper.ts
-
 import {
     BackendMeal,
     BackendWeekPlan,
@@ -35,6 +34,10 @@ export const mapBackendMealToMeal = (
 
         day,
         section,
+
+        // 🔥 Keep full backend object so Home screen can use
+        // mealTiming, category, tags, etc. via meal.raw
+        raw: backendMeal,
     };
 };
 
