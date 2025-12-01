@@ -78,7 +78,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     return (data ?? {}) as T;
 }
 
-
 /* =======================
    AUTH / SIGNUP
    ======================= */
@@ -197,9 +196,12 @@ export async function recommendWeeklyMeals(
     }
 }
 
+/* =======================
+   SINGLE MEAL ORDER
+   ======================= */
 
 export type CartMeal = {
-    orderType: string;           // "SingleMeal"
+    orderType: string; // "SingleMeal"
     mealId: string;
     mealName: string;
     calories: number;
@@ -220,7 +222,6 @@ export type SingleMealOrderResponse = {
     cartItem: CartMeal;
     cart: CartMeal[];
 };
-
 
 /**
  * Create a single-meal order for a given mealId.
@@ -246,7 +247,6 @@ export async function createSingleMealOrder(
         body: JSON.stringify(payload),
     });
 }
-
 
 /* =======================
    CART
@@ -280,19 +280,29 @@ export type CartItem = {
     weeklyPlan?: any;
     endDate?: string;
 
-    // For UI
+    // New from backend: per-item subtotal
+    subTotal?: number;
+
+    // For UI (backwards compatibility if any old fields exist)
     totalAmount?: number | null;
+};
+
+export type CartBreakdown = {
+    totalMealsPrice: number;
+    handlingFee: number;
+    platformFee: number;
+    deliveryFee: number;
+    totalAmount: number;
 };
 
 export type GetCartApiResponse = {
     success: boolean;
     cartCount: number;
+    breakdown: CartBreakdown;
     cart: CartItem[];
 };
 
-export async function getCart(
-    token: string
-): Promise<GetCartApiResponse> {
+export async function getCart(token: string): Promise<GetCartApiResponse> {
     log.info("🛒 Fetching cart");
     return request<GetCartApiResponse>("/cart", {
         method: "GET",
@@ -318,8 +328,8 @@ export type CheckoutCartOrderResponse = {
         handlingFee: number;
         distanceFee: number;
         totalAmount: number;
-        status: string;         // "Pending"
-        paymentStatus: string;  // "Completed" (per backend)
+        status: string; // "Pending"
+        paymentStatus: string; // "Completed" (per backend)
         userLocation: any;
         adminLocation: any;
         createdAt?: string;
@@ -336,5 +346,62 @@ export async function checkoutCart(
         headers: {
             Authorization: `Bearer ${token}`,
         },
+    });
+}
+
+/* =======================
+   CART ITEM UPDATES
+   ======================= */
+
+export type UpdateCartResponse = {
+    success: boolean;
+    message: string;
+    cart: any; // raw cart array from backend
+    cartItem?: any; // for increase endpoint (if backend sends it)
+    totals?: CartBreakdown; // new: totals returned by increase/decrease
+};
+
+export async function increaseCartQuantity(
+    token: string,
+    mealId: string,
+    opts: { scheduledFor?: Date | string } = {}
+): Promise<UpdateCartResponse> {
+    const payload: any = { mealId };
+    if (opts.scheduledFor) {
+        payload.scheduledFor = opts.scheduledFor;
+    }
+
+    return request<UpdateCartResponse>("/cart/increase-quantity", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function decreaseCartQuantity(
+    token: string,
+    mealId: string
+): Promise<UpdateCartResponse> {
+    return request<UpdateCartResponse>("/cart/decrease-quantity", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ mealId }),
+    });
+}
+
+export async function removeCartItem(
+    token: string,
+    mealId: string
+): Promise<UpdateCartResponse> {
+    return request<UpdateCartResponse>("/cart/remove-item", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ mealId }),
     });
 }
