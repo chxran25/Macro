@@ -48,14 +48,23 @@ const CheckoutScreen: React.FC = () => {
 
     // --- Map API response → local state ---
     const mapCartResponse = (res: GetCartApiResponse) => {
-        const singles = (res.cart || []).filter(
-            (item) => item.orderType === "SingleMeal"
+        const relevant = (res.cart || []).filter(
+            (item) =>
+                item.orderType === "SingleMeal" ||
+                item.orderType === "DailyPlan"
         );
 
-        const mapped: LineItem[] = singles.map((item, idx) => ({
-            ...item,
-            _key: `${item.mealId || "item"}-${idx}`,
-        }));
+        const mapped: LineItem[] = relevant.map((item, idx) => {
+            const keyBase =
+                item.orderType === "DailyPlan"
+                    ? `${item.orderType}-${item.dayName || "day"}`
+                    : item.mealId || "item";
+
+            return {
+                ...item,
+                _key: `${keyBase}-${idx}`,
+            };
+        });
 
         setLineItems(mapped);
         setCartCount(mapped.length);
@@ -145,6 +154,8 @@ const CheckoutScreen: React.FC = () => {
 
     // --- Quantity handlers (sync with backend) ---
     const handleIncrement = async (item: LineItem) => {
+        // Daily Plan quantity is fixed (1)
+        if (item.orderType === "DailyPlan") return;
         if (!item.mealId) return;
 
         try {
@@ -170,6 +181,8 @@ const CheckoutScreen: React.FC = () => {
     };
 
     const handleDecrement = async (item: LineItem) => {
+        // Daily Plan quantity is fixed (1)
+        if (item.orderType === "DailyPlan") return;
         if (!item.mealId) return;
 
         try {
@@ -257,21 +270,25 @@ const CheckoutScreen: React.FC = () => {
 
     // --- Render helpers ---
     const renderLineItem = (item: LineItem) => {
-        const subtitle = "Single Meal Plan";
+        const isDaily = item.orderType === "DailyPlan";
         const imageUri = item.imageUrl || undefined;
 
+        let title = item.mealName || "Meal";
+        let subtitle = "Single Meal Plan";
+
+        if (isDaily) {
+            title = `${item.dayName || "Day"} - Daily meals`;
+            subtitle = "Daily Plan (all meals for the day)";
+        }
+
         const unitPrice =
-            (item.price ?? undefined) !== undefined
-                ? item.price || 0
-                : 0;
+            (item.price ?? undefined) !== undefined ? item.price || 0 : 0;
         const qty =
             item.quantity && item.quantity > 0 ? item.quantity : 1;
 
         // Prefer backend subTotal, fall back to price * qty
         const lineTotal =
-            item.subTotal !== undefined
-                ? item.subTotal
-                : unitPrice * qty;
+            item.subTotal !== undefined ? item.subTotal : unitPrice * qty;
 
         return (
             <View
@@ -299,7 +316,7 @@ const CheckoutScreen: React.FC = () => {
                         className="text-white text-[15px] font-semibold"
                         numberOfLines={2}
                     >
-                        {item.mealName || "Meal"}
+                        {title}
                     </Text>
                     <Text className="text-neutral-400 text-[11px] mt-1">
                         {subtitle}
@@ -310,8 +327,11 @@ const CheckoutScreen: React.FC = () => {
                         {/* Minus */}
                         <TouchableOpacity
                             onPress={() => handleDecrement(item)}
-                            activeOpacity={0.9}
-                            className="w-9 h-9 rounded-full border border-white/20 bg-white/10 items-center justify-center"
+                            activeOpacity={isDaily ? 1 : 0.9}
+                            disabled={isDaily}
+                            className={`w-9 h-9 rounded-full border border-white/20 items-center justify-center ${
+                                isDaily ? "bg-white/5" : "bg-white/10"
+                            }`}
                             style={{
                                 shadowColor: "#000",
                                 shadowOffset: { width: 0, height: 3 },
@@ -332,13 +352,14 @@ const CheckoutScreen: React.FC = () => {
                         {/* Plus */}
                         <TouchableOpacity
                             onPress={() => handleIncrement(item)}
-                            activeOpacity={0.9}
+                            activeOpacity={isDaily ? 1 : 0.9}
+                            disabled={isDaily}
                             className="w-9 h-9 rounded-full items-center justify-center"
                             style={{
-                                backgroundColor: "#f5b31b",
-                                shadowColor: "#f5b31b",
+                                backgroundColor: isDaily ? "#4b4335" : "#f5b31b",
+                                shadowColor: isDaily ? "#000" : "#f5b31b",
                                 shadowOffset: { width: 0, height: 4 },
-                                shadowOpacity: 0.5,
+                                shadowOpacity: isDaily ? 0.3 : 0.5,
                                 shadowRadius: 6,
                                 elevation: 5,
                             }}

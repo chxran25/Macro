@@ -405,3 +405,79 @@ export async function removeCartItem(
         body: JSON.stringify({ mealId }),
     });
 }
+
+/* =======================
+   DAILY PLAN ORDER (cart only)
+   ======================= */
+
+export type DailyPlanOrderResponse = {
+    success: boolean;
+    message: string;
+    cartItem: CartItem;
+    cart: CartItem[];
+    formattedDayPlan?: any;
+    schedule?: {
+        startDateUTC: string;
+        startDateIST: string;
+        deliveryTimeIST: string;
+    };
+};
+
+/**
+ * Add a full Daily Plan for a given day (e.g. Monday) to the cart.
+ * Backend route: POST /order/DP  (authMiddleware protected)
+ *
+ * - dayName: "Monday", "Tuesday", etc. (must match backend weeklyPlan keys)
+ * - startDate: optional YYYY-MM-DD; defaults to "tomorrow" in local time
+ * - deliveryTime: "HH:mm" 24-hour (IST) → backend enforces 06:00–10:00
+ * - mealFrequency: number of meals in that day (3 / 4 / 5 / 6)
+ * - userAddressIndex: which saved address to use (default 0)
+ */
+export async function createDailyPlanOrder(
+    token: string,
+    {
+        dayName,
+        startDate,
+        deliveryTime = "07:30",
+        mealFrequency = 3,
+        userAddressIndex = 0,
+    }: {
+        dayName: string;
+        startDate?: string;
+        deliveryTime?: string;
+        mealFrequency?: number;
+        userAddressIndex?: number;
+    }
+): Promise<DailyPlanOrderResponse> {
+    // default startDate → tomorrow (local)
+    const d = startDate
+        ? startDate
+        : (() => {
+            const now = new Date();
+            const tomorrow = new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate() + 1
+            );
+            const y = tomorrow.getFullYear();
+            const m = String(tomorrow.getMonth() + 1).padStart(2, "0");
+            const day = String(tomorrow.getDate()).padStart(2, "0");
+            return `${y}-${m}-${day}`; // YYYY-MM-DD
+        })();
+
+    const payload = {
+        dayName,
+        startDate: d,
+        deliveryTime,
+        mealFrequency,
+        userAddressIndex,
+    };
+
+    return request<DailyPlanOrderResponse>("/order/DP", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+    });
+}
